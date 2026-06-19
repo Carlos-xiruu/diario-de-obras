@@ -22,9 +22,14 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  // Se não estiver logado e tentar acessar qualquer rota que não seja /login
+  // Se NÃO estiver logado e a rota não for a de login
   if (!user && !request.nextUrl.pathname.startsWith('/login')) {
     return NextResponse.redirect(new URL('/login', request.url))
+  }
+  
+  // Se JÁ estiver logado e tentar acessar a página de login, manda para a home
+  if (user && request.nextUrl.pathname.startsWith('/login')) {
+    return NextResponse.redirect(new URL('/', request.url))
   }
 
   return response
