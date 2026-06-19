@@ -6,7 +6,7 @@ export default async function Historico() {
   const { data: registros, error } = await supabase
     .from('diarios')
     .select('*')
-    .order('created_at', { ascending: false });
+    .order('data_registro', { ascending: false });
 
   if (error) {
     console.error("ERRO DO SUPABASE:", error);
