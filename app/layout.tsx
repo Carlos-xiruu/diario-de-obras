@@ -11,7 +11,7 @@ export const metadata: Metadata = {
     description: 'Clique para visualizar o relatório detalhado.',
     images: [
       {
-        url: '/capa.PNG', // Caminho correto: a pasta 'public' é a raiz
+        url: '/og-image.png', // Caminho correto: a pasta 'public' é a raiz
         width: 800,
         height: 600,
         alt: 'Capa do Diário de Obras',
