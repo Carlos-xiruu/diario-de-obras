@@ -1,45 +1,39 @@
 "use client";
 import { useState } from 'react';
-import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
-
-
+import { supabase } from '@/lib/supabase'; // Importe AQUI a instância única
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [isLogin, setIsLogin] = useState(true); // Controla se estamos logando ou cadastrando
+  const [isLogin, setIsLogin] = useState(true);
   const router = useRouter();
 
   const handleAuth = async (e: React.FormEvent) => {
-  e.preventDefault();
-  setLoading(true);
+    e.preventDefault();
+    setLoading(true);
 
-  try {
-    if (isLogin) {
-      console.log("Tentando logar com:", email);
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      
-      if (error) throw error; // Isso vai pular direto para o catch
-      
-      console.log("Sucesso no login:", data);
-      router.push('/');
-      router.refresh();
-    } else {
-      const { error } = await supabase.auth.signUp({ email, password });
-      if (error) throw error;
-      alert("Conta criada! Agora você pode fazer login.");
-      setIsLogin(true);
+    try {
+      if (isLogin) {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        
+        // Login sucesso: força o refresh e navega
+        router.push('/');
+        router.refresh();
+      } else {
+        const { error } = await supabase.auth.signUp({ email, password });
+        if (error) throw error;
+        alert("Conta criada com sucesso!");
+        setIsLogin(true);
+      }
+    } catch (err: any) {
+      alert("Erro: " + err.message);
+    } finally {
+      setLoading(false);
     }
-  } catch (err: any) {
-    // Isso vai mostrar o erro na tela para você saber o que está acontecendo
-    alert("ERRO: " + err.message); 
-    console.error("Detalhes do erro:", err);
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-[#020617] p-4">
