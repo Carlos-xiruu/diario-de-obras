@@ -78,32 +78,34 @@ export default function NovoDiario() {
     }
   };
 
-  const salvarDiario = async (e: React.FormEvent) => {
+const salvarDiario = async (e: React.FormEvent) => {
     e.preventDefault();
     setEnviando(true);
 
     try {
-      // Mapeamento completo conforme sua tabela SQL
       const { error } = await supabase
         .from('diarios')
         .insert([{ 
           obra, 
           cidade, 
-          data: new Date().toISOString().split('T')[0], // Data de hoje
+          data_registro: new Date().toISOString().split('T')[0], // Ajustado para o nome real da sua coluna 'data_registro'
           clima, 
-          equipe, 
-          // ... adicione aqui os campos numéricos
-          // horas_trabalhadas: parseFloat(horas), 
-          // munck_horas: parseFloat(munck),
-          encunhamento: encunhamento === 'sim',
+          equipe: equipe.join(", "), // O banco espera 'text', então juntamos o array em string
+          munk_hrs: 0, // Substitua pelo estado correspondente se tiver
+          guindaste_hrs: 0, 
+          horas_trabalhadas: 0, 
+          m3_montado: 0, 
+          qtd_bisnagas_pu: 0, 
+          eixos_montados: "", 
+          encunhamento_pilares: encunhamento === 'sim',
           observacoes 
         }]);
 
       if (error) throw error;
       
-      alert("Diário gravado com sucesso na nuvem!");
+      alert("Diário gravado com sucesso!");
     } catch (error) {
-      alert("Erro ao salvar no banco: " + (error as Error).message);
+      alert("Erro ao salvar: " + (error as Error).message);
     } finally {
       setEnviando(false);
     }
