@@ -10,7 +10,7 @@ export default function Login() {
   const [isLogin, setIsLogin] = useState(true);
   const router = useRouter();
 
-  const handleAuth = async (e: React.FormEvent) => {
+ const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
@@ -19,13 +19,13 @@ export default function Login() {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
         
-        // Login sucesso: força o refresh e navega
-        router.push('/');
-        router.refresh();
+        console.log("Login OK. Forçando redirecionamento...");
+        // TESTE: Troque o router.push por isso:
+        window.location.href = '/'; 
       } else {
         const { error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
-        alert("Conta criada com sucesso!");
+        alert("Conta criada! Pode logar agora.");
         setIsLogin(true);
       }
     } catch (err: any) {
@@ -34,7 +34,7 @@ export default function Login() {
       setLoading(false);
     }
   };
-
+  
   return (
     <main className="min-h-screen flex items-center justify-center bg-[#020617] p-4">
       <form onSubmit={handleAuth} className="w-full max-w-sm bg-slate-900/60 p-8 rounded-2xl border border-slate-700">
