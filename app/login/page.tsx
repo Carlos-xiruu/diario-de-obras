@@ -11,25 +11,76 @@ const supabase = createClient(
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [isLogin, setIsLogin] = useState(true); // Controla se estamos logando ou cadastrando
   const router = useRouter();
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) alert("Erro: " + error.message);
-    else {
-      router.push('/'); // Redireciona para o início
-      router.refresh();
+    setLoading(true);
+
+    try {
+      if (isLogin) {
+        // LÓGICA DE LOGIN
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        router.push('/');
+        router.refresh();
+      } else {
+        // LÓGICA DE CADASTRO
+        const { error } = await supabase.auth.signUp({ 
+          email, 
+          password 
+        });
+        if (error) throw error;
+        alert("Conta criada com sucesso! Verifique seu e-mail se necessário.");
+        setIsLogin(true); // Volta para a tela de login após cadastrar
+      }
+    } catch (err: any) {
+      alert("Erro: " + err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-[#020617] p-4">
-      <form onSubmit={handleLogin} className="w-full max-w-sm bg-slate-900/60 p-8 rounded-2xl border border-slate-700">
-        <h2 className="text-2xl font-black text-white mb-6 uppercase text-center">Acesso Restrito</h2>
-        <input type="email" placeholder="Email" onChange={(e) => setEmail(e.target.value)} className="w-full mb-4 p-4 bg-slate-950 border border-slate-700 rounded-xl text-white" />
-        <input type="password" placeholder="Senha" onChange={(e) => setPassword(e.target.value)} className="w-full mb-6 p-4 bg-slate-950 border border-slate-700 rounded-xl text-white" />
-        <button type="submit" className="w-full p-4 bg-blue-600 font-bold rounded-xl text-white hover:bg-blue-500 transition-colors">ENTRAR</button>
+      <form onSubmit={handleAuth} className="w-full max-w-sm bg-slate-900/60 p-8 rounded-2xl border border-slate-700">
+        <h2 className="text-2xl font-black text-white mb-6 uppercase text-center">
+          {isLogin ? "Acesso Restrito" : "Criar Conta"}
+        </h2>
+        
+        <input 
+          required 
+          type="email" 
+          placeholder="Email" 
+          onChange={(e) => setEmail(e.target.value)} 
+          className="w-full mb-4 p-4 bg-slate-950 border border-slate-700 rounded-xl text-white outline-none" 
+        />
+        
+        <input 
+          required 
+          type="password" 
+          placeholder="Senha" 
+          onChange={(e) => setPassword(e.target.value)} 
+          className="w-full mb-6 p-4 bg-slate-950 border border-slate-700 rounded-xl text-white outline-none" 
+        />
+        
+        <button 
+          type="submit" 
+          disabled={loading}
+          className="w-full p-4 bg-blue-600 font-bold rounded-xl text-white hover:bg-blue-500 transition-colors disabled:opacity-50"
+        >
+          {loading ? "PROCESSANDO..." : (isLogin ? "ENTRAR" : "CADASTRAR")}
+        </button>
+
+        <button 
+          type="button"
+          onClick={() => setIsLogin(!isLogin)}
+          className="w-full mt-4 text-slate-400 hover:text-white text-sm transition-colors"
+        >
+          {isLogin ? "Não tem conta? Cadastre-se" : "Já tem conta? Fazer Login"}
+        </button>
       </form>
     </main>
   );
