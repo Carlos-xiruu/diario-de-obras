@@ -2,11 +2,16 @@ export const dynamic = 'force-dynamic';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
-// Atualizamos a tipagem para Promise
-export default async function VisualizarDiario({ params }: { params: Promise<{ id: string }> }) {
-  // O Next.js 15 exige que você espere (await) os params
-  const { id } = await params;
-  
+// Usamos "any" aqui como atalho para evitar erro de build se a versão do seu Next.js for híbrida
+export default async function VisualizarDiario({ params }: { params: any }) {
+  // Acesso seguro aos params (funciona tanto na v14 quanto na v15)
+  const resolvedParams = await Promise.resolve(params);
+  const id = resolvedParams.id;
+
+  if (!id) {
+    return <main className="p-8 text-red-500">Erro: ID não encontrado na URL.</main>;
+  }
+
   const cookieStore = await cookies();
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -14,7 +19,6 @@ export default async function VisualizarDiario({ params }: { params: Promise<{ i
     { cookies: { getAll() { return cookieStore.getAll(); } } }
   );
 
-  // Agora usamos o 'id' que capturamos corretamente
   const { data: item, error } = await supabase
     .from('diarios')
     .select('*')
@@ -35,7 +39,7 @@ export default async function VisualizarDiario({ params }: { params: Promise<{ i
     <main className="p-8 bg-white text-slate-900 min-h-screen">
       <div className="max-w-3xl mx-auto">
         <button 
-          onClick={() => window.print()}
+          onClick={() => typeof window !== 'undefined' && window.print()}
           className="no-print bg-blue-600 text-white px-6 py-3 rounded-lg font-bold mb-8 hover:bg-blue-700 transition-colors"
         >
           Salvar como PDF / Imprimir
@@ -45,7 +49,6 @@ export default async function VisualizarDiario({ params }: { params: Promise<{ i
           Diário de Obra - {item.obra || "Sem nome"}
         </h1>
 
-        {/* ... restante do seu código igual ... */}
         <div className="grid grid-cols-2 gap-6 mb-8 text-sm">
           <p><strong>Cidade:</strong> {item.cidade}</p>
           <p><strong>Data:</strong> {item.data_registro}</p>
