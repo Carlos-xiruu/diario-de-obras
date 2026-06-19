@@ -1,44 +1,38 @@
 "use client";
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase'; // Importe AQUI a instância única
+import { supabase } from '@/lib/supabase';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [isLogin, setIsLogin] = useState(true);
-  const router = useRouter();
 
- const handleAuth = async (e: React.FormEvent) => {
-  e.preventDefault(); // Impede o refresh padrão
-  console.log("--- SUBMIT INICIADO ---");
-  setLoading(true);
-  
-  try {
-    if (isLogin) {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
-      
-      console.log("Login OK. Aguardando sincronização e forçando redirecionamento...");
-      
-      // Aguarda 500ms para garantir que o cookie de sessão seja gravado
-      // pelo Supabase antes de forçarmos o navegador a ir para a página inicial.
-      await new Promise((resolve) => setTimeout(resolve, 500)); 
-      
-      window.location.href = '/'; 
-    } else {
-      const { error } = await supabase.auth.signUp({ email, password });
-      if (error) throw error;
-      alert("Conta criada! Pode logar agora.");
-      setIsLogin(true);
+  const handleAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      if (isLogin) {
+        // Agora, com o createBrowserClient, este comando salvará um Cookie!
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        
+        console.log("Login OK. Redirecionando...");
+        // Força o reload para o middleware ler o cookie novo
+        window.location.href = '/'; 
+      } else {
+        const { error } = await supabase.auth.signUp({ email, password });
+        if (error) throw error;
+        alert("Conta criada! Pode logar agora.");
+        setIsLogin(true);
+      }
+    } catch (err: any) {
+      alert("Erro: " + err.message);
+    } finally {
+      setLoading(false);
     }
-  } catch (err: any) {
-    alert("Erro: " + err.message);
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-[#020617] p-4">
