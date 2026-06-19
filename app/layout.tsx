@@ -1,6 +1,24 @@
 import type { Metadata } from "next";
-import "./globals.css"; // <-- É este fio aqui que liga toda a estilização!
+import "./globals.css"; 
 import Navbar from "./components/Navbar";
+
+// Exportar os metadados separadamente para o Next.js processar melhor
+export const metadata: Metadata = {
+  title: 'Diário de Obras',
+  description: 'Gestão de Montagem de Pré-Moldados',
+  openGraph: {
+    title: 'Diário de Obras - Registro de Montagem',
+    description: 'Clique para visualizar o relatório detalhado.',
+    images: [
+      {
+        url: '/capa.PNG', // Caminho correto: a pasta 'public' é a raiz
+        width: 800,
+        height: 600,
+        alt: 'Capa do Diário de Obras',
+      },
+    ],
+  },
+};
 
 export default function RootLayout({
   children,
@@ -16,18 +34,3 @@ export default function RootLayout({
     </html>
   );
 }
-export const metadata = {
-  title: 'Diário de Obras',
-  description: 'Gestão de Montagem de Pré-Moldados',
-  openGraph: {
-    title: 'Diário de Obras - Registro de Montagem',
-    description: 'Clique para visualizar o relatório detalhado.',
-    images: [
-      {
-        url: 'diario-de-obras\capa.PNG', // A imagem que está na sua pasta public
-        width: 800,
-        height: 600,
-      },
-    ],
-  },
-};
