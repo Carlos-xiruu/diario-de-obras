@@ -11,9 +11,10 @@ export default function Login() {
   const router = useRouter();
 
  const handleAuth = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-
+  e.preventDefault(); // Impede o refresh padrão
+  console.log("--- SUBMIT INICIADO ---"); // Isso TEM que aparecer
+  setLoading(true);
+  
     try {
       if (isLogin) {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -34,7 +35,7 @@ export default function Login() {
       setLoading(false);
     }
   };
-  
+
   return (
     <main className="min-h-screen flex items-center justify-center bg-[#020617] p-4">
       <form onSubmit={handleAuth} className="w-full max-w-sm bg-slate-900/60 p-8 rounded-2xl border border-slate-700">
