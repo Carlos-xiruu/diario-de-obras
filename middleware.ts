@@ -1,11 +1,8 @@
-// middleware.ts
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
-  let response = NextResponse.next({
-    request: { headers: request.headers },
-  })
+  let response = NextResponse.next({ request: { headers: request.headers } })
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -22,13 +19,20 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  // Se NÃO estiver logado e a rota não for a de login
-  if (!user && !request.nextUrl.pathname.startsWith('/login')) {
+  // LOG DE DEBUG (Aparecerá nos logs da Vercel ou no terminal se rodar local)
+  console.log("Middleware - Usuário encontrado:", !!user);
+
+  const isLoginPage = request.nextUrl.pathname.startsWith('/login')
+
+  // Se NÃO está logado e NÃO está na página de login, redireciona para login
+  if (!user && !isLoginPage) {
+    console.log("Middleware - Bloqueado: Não logado, indo para login");
     return NextResponse.redirect(new URL('/login', request.url))
   }
   
-  // Se JÁ estiver logado e tentar acessar a página de login, manda para a home
-  if (user && request.nextUrl.pathname.startsWith('/login')) {
+  // Se ESTÁ logado e está na página de login, redireciona para home
+  if (user && isLoginPage) {
+    console.log("Middleware - Bloqueado: Já logado, indo para home");
     return NextResponse.redirect(new URL('/', request.url))
   }
 
