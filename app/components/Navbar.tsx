@@ -16,7 +16,8 @@ export default function Navbar() {
   };
 
   return (
-    <nav className="flex justify-between items-center p-4 bg-slate-900 border-b border-slate-700 text-white">
+    // A classe print:hidden aqui garante que toda a barra (e o botão) suma no PDF
+    <nav className="flex justify-between items-center p-4 bg-slate-900 border-b border-slate-700 text-white print:hidden">
       <div className="font-bold tracking-wider uppercase">Diário de Obras</div>
       <button 
         onClick={handleLogout}

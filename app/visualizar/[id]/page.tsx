@@ -85,7 +85,6 @@ export default async function VisualizarDiario({ params }: { params: Promise<{ i
     );
 
   } catch (err: any) {
-    // Se der erro, ele para aqui e mostra na tela, sem travar o servidor
     return (
       <main className="p-8 text-red-500">
         <h1 className="text-xl font-bold">Erro ao carregar diário</h1>

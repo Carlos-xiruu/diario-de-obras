@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Montserrat, Inter } from "next/font/google";
 import imageCompression from 'browser-image-compression';
-import Link from "next/link"; // Importando o Link para o botão Voltar
+import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 
 const montserrat = Montserrat({ subsets: ["latin"], weight: ["700", "800", "900"] });
@@ -13,11 +13,10 @@ export default function NovoDiario() {
   const [enviando, setEnviando] = useState(false);
   const [clima, setClima] = useState("");
   const [encunhamento, setEncunhamento] = useState("");
-  
-  // Estado das Observações (necessário para o truque do PDF)
   const [observacoes, setObservacoes] = useState("");
   
-  const [fotoUrl, setFotoUrl] = useState<string | null>(null);
+  // Agora controlamos um array (lista) de fotos
+  const [fotos, setFotos] = useState<string[]>([]);
   const [comprimindo, setComprimindo] = useState(false);
 
   const [equipe, setEquipe] = useState<string[]>([]);
@@ -25,6 +24,9 @@ export default function NovoDiario() {
 
   const [obra, setObra] = useState("");
   const [cidade, setCidade] = useState("");
+
+  // Guardamos o ID do diário após salvar para o link de compartilhamento
+  const [idSalvo, setIdSalvo] = useState<string | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -43,21 +45,32 @@ export default function NovoDiario() {
     setEquipe(equipe.filter((_, i) => i !== index));
   };
 
+  // Lógica aprimorada para processar múltiplas fotos
   const processarFoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
 
     setComprimindo(true);
     try {
       const options = { maxSizeMB: 0.2, maxWidthOrHeight: 1280, useWebWorker: true };
-      const compressedFile = await imageCompression(file, options);
-      setFotoUrl(URL.createObjectURL(compressedFile));
+      const novasFotosUrls: string[] = [];
+
+      for (const file of files) {
+        const compressedFile = await imageCompression(file, options);
+        novasFotosUrls.push(URL.createObjectURL(compressedFile));
+      }
+
+      setFotos((prev) => [...prev, ...novasFotosUrls]);
     } catch (error) {
-      alert("Erro ao processar a imagem.");
+      alert("Erro ao processar as imagens.");
       console.error(error);
     } finally {
       setComprimindo(false);
     }
+  };
+
+  const removerFoto = (index: number) => {
+    setFotos((prev) => prev.filter((_, i) => i !== index));
   };
 
   const exportarPDF = () => window.print();
@@ -65,33 +78,37 @@ export default function NovoDiario() {
   const compartilharDiario = async () => {
     if (navigator.share) {
       try {
+        const urlCompartilhar = idSalvo
+          ? `${window.location.origin}/visualizar/${idSalvo}`
+          : window.location.href;
+
         await navigator.share({
           title: `Diário de Obras - ${obra || 'Montagem'}`,
-          text: 'Segue o registro diário de montagem preenchido.',
-          url: window.location.href,
+          text: idSalvo ? 'Segue o link do diário preenchido.' : 'Acompanhe nosso diário de obras.',
+          url: urlCompartilhar,
         });
       } catch (error) {
         console.log('Compartilhamento cancelado', error);
       }
     } else {
-      alert("Seu navegador não suporta o botão de compartilhar. Use o Exportar PDF.");
+      alert("Seu navegador não suporta o botão de compartilhar nativo. Use o Exportar PDF.");
     }
   };
 
-const salvarDiario = async (e: React.FormEvent) => {
+  const salvarDiario = async (e: React.FormEvent) => {
     e.preventDefault();
     setEnviando(true);
 
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('diarios')
         .insert([{ 
           obra, 
           cidade, 
-          data_registro: new Date().toISOString().split('T')[0], // Ajustado para o nome real da sua coluna 'data_registro'
+          data_registro: new Date().toISOString().split('T')[0],
           clima, 
-          equipe: equipe.join(", "), // O banco espera 'text', então juntamos o array em string
-          munk_hrs: 0, // Substitua pelo estado correspondente se tiver
+          equipe: equipe.join(", "),
+          munk_hrs: 0,
           guindaste_hrs: 0, 
           horas_trabalhadas: 0, 
           m3_montado: 0, 
@@ -99,10 +116,15 @@ const salvarDiario = async (e: React.FormEvent) => {
           eixos_montados: "", 
           encunhamento_pilares: encunhamento === 'sim',
           observacoes 
-        }]);
+        }])
+        .select(); // Exige que o Supabase devolva a linha criada
 
       if (error) throw error;
       
+      if (data && data.length > 0) {
+        setIdSalvo(data[0].id); // Salva o ID para o compartilhamento funcionar
+      }
+
       alert("Diário gravado com sucesso!");
     } catch (error) {
       alert("Erro ao salvar: " + (error as Error).message);
@@ -114,7 +136,6 @@ const salvarDiario = async (e: React.FormEvent) => {
   return (
     <main className={`relative min-h-screen p-4 md:p-8 flex justify-center text-slate-200 print:bg-white print:text-black print:p-0 ${inter.className}`}>
       
-      {/* Background Neon e Grid */}
       <div className="fixed inset-0 z-0 bg-[#020617] pointer-events-none print:hidden">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_10%_20%,rgba(29,78,216,0.15),transparent_40%),radial-gradient(circle_at_90%_80%,rgba(100,116,139,0.1),transparent_40%)]"></div>
         <div className="absolute inset-0 opacity-30" style={{ backgroundImage: 'radial-gradient(rgba(148, 163, 184, 0.4) 1px, transparent 1px)', backgroundSize: '40px 40px', maskImage: 'linear-gradient(to bottom, black, transparent 85%)', WebkitMaskImage: 'linear-gradient(to bottom, black, transparent 85%)' }}></div>
@@ -122,14 +143,10 @@ const salvarDiario = async (e: React.FormEvent) => {
 
       <div className="relative z-10 w-full max-w-4xl bg-slate-900/60 backdrop-blur-xl border border-slate-700/50 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.6)] overflow-hidden my-4 transition-all duration-500 print:shadow-none print:border-none print:bg-white print:text-black print:my-0">
         
-        {/* Cabeçalho */}
         <div className="p-8 text-center border-b border-slate-700/50 relative overflow-hidden bg-slate-800/30 print:bg-transparent print:border-black print:border-b-2 print:p-4 print:pb-6">
-          
-          {/* BOTÃO VOLTAR */}
           <Link href="/" className="absolute top-6 left-6 text-slate-400 hover:text-blue-400 transition-colors flex items-center gap-2 font-bold print:hidden">
             <span className="text-xl leading-none">&larr;</span> Voltar
           </Link>
-
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-700 to-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.8)] print:hidden"></div>
           <h1 className={`${montserrat.className} text-3xl md:text-4xl font-black tracking-tight text-white print:text-black mt-4 uppercase`}>
             Diário de Obra - Montagem
@@ -141,7 +158,6 @@ const salvarDiario = async (e: React.FormEvent) => {
 
         <form onSubmit={salvarDiario} className="p-6 md:p-10 space-y-10 print:p-4 print:space-y-6">
           
-          {/* Seção 1: Identificação */}
           <section>
             <div className="flex items-center gap-3 mb-6 print:mb-4">
               <span className={`${montserrat.className} w-8 h-8 rounded-lg bg-blue-500/20 border border-blue-500/50 text-blue-400 flex items-center justify-center text-sm font-black print:hidden`}>1</span>
@@ -175,13 +191,11 @@ const salvarDiario = async (e: React.FormEvent) => {
               </div>
             </div>
             
-            {/* Clima no PDF - Texto Limpo */}
             <div className="hidden print:block mt-4 border-b border-gray-300 pb-2">
               <p className="font-bold text-gray-600">Clima no dia: <span className="font-normal text-black ml-2 uppercase">{clima || "Não informado"}</span></p>
             </div>
           </section>
 
-          {/* Seção 2: Produção */}
           <section>
             <div className="flex items-center gap-3 mb-6 pt-6 border-t border-slate-700/50 print:border-black print:pt-6 print:mb-4">
               <span className={`${montserrat.className} w-8 h-8 rounded-lg bg-blue-500/20 border border-blue-500/50 text-blue-400 flex items-center justify-center text-sm font-black print:hidden`}>2</span>
@@ -190,7 +204,6 @@ const salvarDiario = async (e: React.FormEvent) => {
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 print:gap-x-8 print:gap-y-4 mb-6">
               
-              {/* Super Campo de Equipe */}
               <div className="md:col-span-2">
                 <label className="block text-sm font-bold text-slate-300 print:text-gray-600 mb-2">Equipe Presente</label>
                 
@@ -199,7 +212,6 @@ const salvarDiario = async (e: React.FormEvent) => {
                   <button type="button" onClick={adicionarMontador} className="bg-blue-600 text-white px-6 font-bold rounded-xl hover:bg-blue-500 transition-colors">+</button>
                 </div>
 
-                {/* Exibição para Tela */}
                 <div className="flex flex-wrap gap-2 mt-4 print:hidden">
                   {equipe.map((nome, i) => (
                     <span key={i} className="bg-slate-800 border border-slate-600 text-blue-400 px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2">
@@ -210,7 +222,6 @@ const salvarDiario = async (e: React.FormEvent) => {
                   {equipe.length === 0 && <span className="text-slate-500 text-sm italic">Nenhum montador adicionado.</span>}
                 </div>
 
-                {/* Exibição para PDF (Texto Simples) */}
                 <div className="hidden print:block border-b border-gray-300 pb-2 mt-1">
                   <span className="text-black">{equipe.length > 0 ? equipe.join(", ") : "Não informado"}</span>
                 </div>
@@ -246,7 +257,6 @@ const salvarDiario = async (e: React.FormEvent) => {
             </div>
           </section>
 
-          {/* Seção 3: Controle Acumulado */}
           <section className="print:pt-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-800/40 border border-slate-700/50 p-6 rounded-xl print:bg-transparent print:border-none print:p-0 print:gap-8">
               <div>
@@ -260,7 +270,6 @@ const salvarDiario = async (e: React.FormEvent) => {
             </div>
           </section>
 
-          {/* Seção 4: Validação e Avisos */}
           <section>
             <div className="flex items-center gap-3 mb-6 pt-6 border-t border-slate-700/50 print:border-black print:pt-6 print:mb-4">
               <span className={`${montserrat.className} w-8 h-8 rounded-lg bg-blue-500/20 border border-blue-500/50 text-blue-400 flex items-center justify-center text-sm font-black print:hidden`}>3</span>
@@ -285,12 +294,10 @@ const salvarDiario = async (e: React.FormEvent) => {
               </div>
             </div>
 
-            {/* Encunhamento no PDF */}
             <div className="hidden print:block mb-4 border-b border-gray-300 pb-2">
               <p className="font-bold text-gray-600">Concretagem / Encunhamento: <span className="font-normal text-black ml-2 uppercase">{encunhamento || "Não informado"}</span></p>
             </div>
 
-            {/* Painel de Avisos */}
             <div className="bg-red-950/40 border border-red-500/50 rounded-xl p-5 mb-6 text-red-300 text-xs font-bold leading-relaxed print:bg-transparent print:border-none print:text-gray-500 print:p-0 print:mb-6">
               <ul className="list-disc pl-4 space-y-2">
                 <li>PROGRAMAÇÃO DE AGREGADO DEVE SER COMUNICADO 1 DIA DE ANTECEDÊNCIA.</li>
@@ -298,11 +305,8 @@ const salvarDiario = async (e: React.FormEvent) => {
               </ul>
             </div>
 
-            {/* TRUQUE DO PDF: OBSERVAÇÕES INFINITAS */}
             <div className="mb-6">
               <label className="block text-sm font-bold text-slate-300 print:text-gray-600 mb-2">Informações Adicionais / Observação</label>
-              
-              {/* Oculto no PDF - Caixa de texto normal */}
               <textarea 
                 rows={4} 
                 value={observacoes}
@@ -310,32 +314,43 @@ const salvarDiario = async (e: React.FormEvent) => {
                 className="w-full bg-slate-950/50 border border-slate-700/50 text-slate-200 rounded-xl p-4 outline-none resize-none print:hidden" 
                 placeholder="Relate eventos importantes, atrasos..."
               ></textarea>
-              
-              {/* Oculto na tela, Visível no PDF - O texto cresce automaticamente! */}
               <div className="hidden print:block w-full text-black whitespace-pre-wrap min-h-[80px] border-b border-gray-300 pb-2">
                 {observacoes || "Nenhuma observação registrada."}
               </div>
             </div>
 
-            {/* Foto da Obra */}
+            {/* Gerenciamento do Grid Dinâmico das Fotos */}
             <div className="mb-6">
               <label className="block text-sm font-bold text-slate-300 print:text-gray-600 mb-3">Registro Fotográfico</label>
+              
               <div className="print:hidden">
-                <input type="file" id="cameraInput" accept="image/*" capture="environment" onChange={processarFoto} className="hidden" />
+                {/* Removido o capture para permitir Câmera E Galeria. Adicionado o multiple. */}
+                <input type="file" id="cameraInput" accept="image/*" multiple onChange={processarFoto} className="hidden" />
                 <label htmlFor="cameraInput" className="w-full bg-slate-800/40 border border-dashed border-slate-600 text-slate-400 hover:text-blue-400 transition-colors rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer">
-                  {comprimindo ? <span>Comprimindo imagem... ⏳</span> : <><span className="text-3xl mb-2">📷</span><span className={`${montserrat.className} font-bold text-sm tracking-widest`}>TIRAR FOTO DA OBRA</span></>}
+                  {comprimindo ? <span>Processando imagens... ⏳</span> : <><span className="text-3xl mb-2">📸</span><span className={`${montserrat.className} font-bold text-sm tracking-widest text-center`}>ADICIONAR FOTOS<br/><span className="text-xs font-normal">Câmera ou Galeria</span></span></>}
                 </label>
               </div>
-              {fotoUrl && (
-                <div className="mt-4 rounded-xl overflow-hidden border border-slate-700/50 print:border-none print:rounded-none max-w-sm mx-auto">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={fotoUrl} alt="Evidência da Obra" className="w-full h-auto object-cover print:max-h-[300px] print:object-contain" />
+
+              {fotos.length > 0 && (
+                <div className={`mt-4 grid gap-4 print:gap-2 ${
+                  fotos.length === 1 ? 'grid-cols-1 max-w-sm mx-auto' : 
+                  fotos.length === 2 ? 'grid-cols-2' : 
+                  'grid-cols-3'
+                }`}>
+                  {fotos.map((url, i) => (
+                    <div key={i} className="relative rounded-xl overflow-hidden border border-slate-700/50 print:border-none print:rounded-none bg-slate-900 flex justify-center">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={url} alt={`Evidência ${i + 1}`} className="w-full h-auto object-cover print:max-h-[250px] print:object-contain" />
+                      <button type="button" onClick={() => removerFoto(i)} className="absolute top-2 right-2 bg-red-600 hover:bg-red-700 text-white w-8 h-8 flex items-center justify-center rounded-full font-bold shadow-lg print:hidden transition-colors">
+                        ✕
+                      </button>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
           </section>
 
-          {/* PAINEL DE BOTÕES (Escondidos no PDF) */}
           <div className="pt-8 space-y-4 print:hidden border-t border-slate-700/50 mt-8">
             <button type="submit" disabled={enviando} className={`${montserrat.className} w-full font-black tracking-widest rounded-xl text-lg uppercase px-5 py-5 text-center transition-all duration-300 bg-gradient-to-r from-blue-500 to-blue-700 text-white shadow-[0_0_20px_rgba(59,130,246,0.4)]`}>
               {enviando ? "Processando..." : "Salvar no Banco de Dados"}
@@ -345,7 +360,7 @@ const salvarDiario = async (e: React.FormEvent) => {
                 📄 Salvar PDF
               </button>
               <button type="button" onClick={compartilharDiario} className={`${montserrat.className} w-full font-bold tracking-widest rounded-xl text-sm uppercase px-5 py-4 border border-green-600/50 text-green-400 hover:bg-green-900/20 transition-colors`}>
-                🔗 Compartilhar
+                🔗 Compartilhar Link
               </button>
             </div>
           </div>
