@@ -1,0 +1,21 @@
+{
+  "name": "Diário de Obras",
+  "short_name": "Diário",
+  "description": "Gestão de Montagem de Pré-Moldados",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#1d4ed8",
+  "icons": [
+    {
+      "src": "/og-image.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/og-image.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

@@ -16,23 +16,28 @@ export default function Navbar() {
   };
 
   return (
-    // Adicionamos sticky, top-0 e z-50 para fixar no topo e ficar na frente de qualquer fundo!
-    <nav className="sticky top-0 z-50 flex justify-between items-center p-4 bg-slate-900 border-b border-slate-700 text-white print:hidden shadow-md">
-      <Link href="/" className="font-bold tracking-wider uppercase hover:text-blue-400 transition-colors">
+    <nav className="sticky top-0 z-50 flex justify-between items-center p-3 sm:p-4 bg-slate-900 border-b border-slate-700 text-white print:hidden shadow-md">
+      {/* Diminuí um pouco a fonte no celular (text-sm) para dar espaço */}
+      <Link href="/" className="font-bold tracking-wider uppercase hover:text-blue-400 transition-colors text-sm sm:text-base whitespace-nowrap">
         Diário de Obras
       </Link>
       
-      <div className="flex items-center gap-6">
+      {/* Diminuí o gap no celular (gap-3) para os botões não ficarem espremidos */}
+      <div className="flex items-center gap-3 sm:gap-6">
+        
+        {/* Removido o 'hidden'. Agora ele aparece sempre! */}
         <Link 
           href="/dashboard" 
-          className="text-sm font-bold text-blue-400 hover:text-blue-300 transition-colors hidden sm:block"
+          className="text-xs sm:text-sm font-bold text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1"
         >
-          📊 DASHBOARD
+          <span>📊</span>
+          <span className="hidden sm:inline">DASHBOARD</span>
+          <span className="sm:hidden">DASH</span>
         </Link>
 
         <button 
           onClick={handleLogout}
-          className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-sm font-bold transition shadow-lg"
+          className="px-3 py-1.5 sm:px-4 sm:py-2 bg-red-600 hover:bg-red-700 rounded-lg text-xs sm:text-sm font-bold transition shadow-lg"
         >
           SAIR
         </button>

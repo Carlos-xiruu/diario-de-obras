@@ -6,6 +6,7 @@ import Navbar from "./components/Navbar";
 export const metadata: Metadata = {
   title: 'Diário de Obras',
   description: 'Gestão de Montagem de Pré-Moldados',
+  manifest: '/manifest.json',
   openGraph: {
     title: 'Diário de Obras - Registro de Montagem',
     description: 'Clique para visualizar o relatório detalhado.',

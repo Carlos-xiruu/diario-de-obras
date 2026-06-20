@@ -14,24 +14,25 @@ export default function NovoDiario() {
   const [clima, setClima] = useState("");
   const [encunhamento, setEncunhamento] = useState("");
   const [observacoes, setObservacoes] = useState("");
-  
-  // Agora controlamos um array (lista) de fotos
   const [fotos, setFotos] = useState<string[]>([]);
   const [comprimindo, setComprimindo] = useState(false);
-
   const [equipe, setEquipe] = useState<string[]>([]);
   const [nomeAtual, setNomeAtual] = useState("");
-
   const [obra, setObra] = useState("");
   const [cidade, setCidade] = useState("");
-
-  // Guardamos o ID do diário após salvar para o link de compartilhamento
   const [idSalvo, setIdSalvo] = useState<string | null>(null);
+
+  // NOVO: Estado para gerenciar os diários salvos offline
+  const [pendentes, setPendentes] = useState<any[]>([]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("obra")) setObra(params.get("obra") || "");
     if (params.get("cidade")) setCidade(params.get("cidade") || "");
+
+    // NOVO: Ao abrir a tela, verifica se tem diários parados na fila offline
+    const filaOffline = JSON.parse(localStorage.getItem('diarios_offline') || '[]');
+    setPendentes(filaOffline);
   }, []);
 
   const adicionarMontador = () => {
@@ -45,7 +46,6 @@ export default function NovoDiario() {
     setEquipe(equipe.filter((_, i) => i !== index));
   };
 
-  // Lógica aprimorada para processar múltiplas fotos
   const processarFoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
@@ -63,7 +63,6 @@ export default function NovoDiario() {
       setFotos((prev) => [...prev, ...novasFotosUrls]);
     } catch (error) {
       alert("Erro ao processar as imagens.");
-      console.error(error);
     } finally {
       setComprimindo(false);
     }
@@ -95,37 +94,68 @@ export default function NovoDiario() {
     }
   };
 
+  // NOVO: Função para sincronizar o que ficou preso no celular
+  const sincronizarPendentes = async () => {
+    if (!navigator.onLine) {
+      alert("Você ainda está sem internet! Conecte-se a uma rede para sincronizar.");
+      return;
+    }
+
+    setEnviando(true);
+    try {
+      const { error } = await supabase.from('diarios').insert(pendentes);
+      if (error) throw error;
+
+      alert(`${pendentes.length} diário(s) sincronizado(s) com sucesso!`);
+      localStorage.removeItem('diarios_offline');
+      setPendentes([]);
+    } catch (error) {
+      alert("Erro ao sincronizar: " + (error as Error).message);
+    } finally {
+      setEnviando(false);
+    }
+  };
+
   const salvarDiario = async (e: React.FormEvent) => {
     e.preventDefault();
     setEnviando(true);
 
+    const payload = { 
+      obra, 
+      cidade, 
+      data_registro: new Date().toISOString().split('T')[0],
+      clima, 
+      equipe: equipe.join(", "),
+      munk_hrs: 0,
+      guindaste_hrs: 0, 
+      horas_trabalhadas: 0, 
+      m3_montado: 0, 
+      qtd_bisnagas_pu: 0, 
+      eixos_montados: "", 
+      encunhamento_pilares: encunhamento === 'sim',
+      observacoes 
+    };
+
+    // INTELIGÊNCIA OFFLINE AQUI
+    if (!navigator.onLine) {
+      const novaFila = [...pendentes, payload];
+      localStorage.setItem('diarios_offline', JSON.stringify(novaFila));
+      setPendentes(novaFila);
+      alert("📡 Você está OFFLINE! O diário foi salvo na memória do celular. Clique em 'Sincronizar' quando a internet voltar.");
+      setEnviando(false);
+      return;
+    }
+
     try {
-      const { data, error } = await supabase
-        .from('diarios')
-        .insert([{ 
-          obra, 
-          cidade, 
-          data_registro: new Date().toISOString().split('T')[0],
-          clima, 
-          equipe: equipe.join(", "),
-          munk_hrs: 0,
-          guindaste_hrs: 0, 
-          horas_trabalhadas: 0, 
-          m3_montado: 0, 
-          qtd_bisnagas_pu: 0, 
-          eixos_montados: "", 
-          encunhamento_pilares: encunhamento === 'sim',
-          observacoes 
-        }])
-        .select(); // Exige que o Supabase devolva a linha criada
+      const { data, error } = await supabase.from('diarios').insert([payload]).select();
 
       if (error) throw error;
       
       if (data && data.length > 0) {
-        setIdSalvo(data[0].id); // Salva o ID para o compartilhamento funcionar
+        setIdSalvo(data[0].id);
       }
 
-      alert("Diário gravado com sucesso!");
+      alert("Diário gravado com sucesso no banco de dados!");
     } catch (error) {
       alert("Erro ao salvar: " + (error as Error).message);
     } finally {
@@ -143,6 +173,19 @@ export default function NovoDiario() {
 
       <div className="relative z-10 w-full max-w-4xl bg-slate-900/60 backdrop-blur-xl border border-slate-700/50 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.6)] overflow-hidden my-4 transition-all duration-500 print:shadow-none print:border-none print:bg-white print:text-black print:my-0">
         
+        {/* AVISO DE OFFLINE - Fica visível se tiver itens pendentes */}
+        {pendentes.length > 0 && (
+          <div className="bg-orange-500/20 border-b border-orange-500 text-orange-400 p-4 text-center font-bold print:hidden flex flex-col md:flex-row items-center justify-center gap-4">
+            ⚠️ Você tem {pendentes.length} diário(s) esperando internet para enviar.
+            <button 
+              onClick={sincronizarPendentes} 
+              className="bg-orange-500 text-white px-4 py-2 rounded hover:bg-orange-600 transition"
+            >
+              🔄 Sincronizar Agora
+            </button>
+          </div>
+        )}
+
         <div className="p-8 text-center border-b border-slate-700/50 relative overflow-hidden bg-slate-800/30 print:bg-transparent print:border-black print:border-b-2 print:p-4 print:pb-6">
           <Link href="/" className="absolute top-6 left-6 text-slate-400 hover:text-blue-400 transition-colors flex items-center gap-2 font-bold print:hidden">
             <span className="text-xl leading-none">&larr;</span> Voltar
@@ -151,9 +194,6 @@ export default function NovoDiario() {
           <h1 className={`${montserrat.className} text-3xl md:text-4xl font-black tracking-tight text-white print:text-black mt-4 uppercase`}>
             Diário de Obra - Montagem
           </h1>
-          <p className={`${montserrat.className} text-blue-400 print:text-gray-500 text-sm mt-3 font-bold tracking-[0.2em] uppercase`}>
-            Relatório de Produção Diária
-          </p>
         </div>
 
         <form onSubmit={salvarDiario} className="p-6 md:p-10 space-y-10 print:p-4 print:space-y-6">
@@ -319,12 +359,10 @@ export default function NovoDiario() {
               </div>
             </div>
 
-            {/* Gerenciamento do Grid Dinâmico das Fotos */}
             <div className="mb-6">
               <label className="block text-sm font-bold text-slate-300 print:text-gray-600 mb-3">Registro Fotográfico</label>
               
               <div className="print:hidden">
-                {/* Removido o capture para permitir Câmera E Galeria. Adicionado o multiple. */}
                 <input type="file" id="cameraInput" accept="image/*" multiple onChange={processarFoto} className="hidden" />
                 <label htmlFor="cameraInput" className="w-full bg-slate-800/40 border border-dashed border-slate-600 text-slate-400 hover:text-blue-400 transition-colors rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer">
                   {comprimindo ? <span>Processando imagens... ⏳</span> : <><span className="text-3xl mb-2">📸</span><span className={`${montserrat.className} font-bold text-sm tracking-widest text-center`}>ADICIONAR FOTOS<br/><span className="text-xs font-normal">Câmera ou Galeria</span></span></>}
