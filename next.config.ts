@@ -5,12 +5,13 @@ const withPWA = withPWAInit({
   cacheOnFrontEndNav: true,
   aggressiveFrontEndNavCaching: true,
   reloadOnOnline: true,
-  disable: process.env.NODE_ENV === "development", // O Service Worker só ativa na Vercel para não atrapalhar  testes locais
+  disable: process.env.NODE_ENV === "development", // O Service Worker só ativa na Vercel para não atrapalhar seus testes locais
 });
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Se você tinha outras configurações aqui antes, pode mantê-las.
+  // Essa linha abaixo silencia o erro e diz pro Next.js 16 ficar tranquilo
+  turbopack: {}, 
 };
 
 export default withPWA(nextConfig);
