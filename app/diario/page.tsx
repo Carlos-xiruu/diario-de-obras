@@ -22,7 +22,17 @@ export default function NovoDiario() {
   const [cidade, setCidade] = useState("");
   const [idSalvo, setIdSalvo] = useState<string | null>(null);
 
-  // NOVO: Estado para gerenciar os diários salvos offline
+  // CORREÇÃO: Conectando todos os campos restantes ao estado do React
+  const [dataRegistro, setDataRegistro] = useState(new Date().toISOString().split('T')[0]);
+  const [horasTrabalhadas, setHorasTrabalhadas] = useState("");
+  const [eixosMontados, setEixosMontados] = useState("");
+  const [munkHrs, setMunkHrs] = useState("");
+  const [guindasteHrs, setGuindasteHrs] = useState("");
+  const [m3Montado, setM3Montado] = useState("");
+  const [qtdBisnagasPu, setQtdBisnagasPu] = useState("");
+  const [totalAcumuladoM3, setTotalAcumuladoM3] = useState("");
+  const [qtdTotalPu, setQtdTotalPu] = useState("");
+
   const [pendentes, setPendentes] = useState<any[]>([]);
 
   useEffect(() => {
@@ -30,7 +40,6 @@ export default function NovoDiario() {
     if (params.get("obra")) setObra(params.get("obra") || "");
     if (params.get("cidade")) setCidade(params.get("cidade") || "");
 
-    // NOVO: Ao abrir a tela, verifica se tem diários parados na fila offline
     const filaOffline = JSON.parse(localStorage.getItem('diarios_offline') || '[]');
     setPendentes(filaOffline);
   }, []);
@@ -94,7 +103,6 @@ export default function NovoDiario() {
     }
   };
 
-  // NOVO: Função para sincronizar o que ficou preso no celular
   const sincronizarPendentes = async () => {
     if (!navigator.onLine) {
       alert("Você ainda está sem internet! Conecte-se a uma rede para sincronizar.");
@@ -120,28 +128,34 @@ export default function NovoDiario() {
     e.preventDefault();
     setEnviando(true);
 
+    // CORREÇÃO: Tratando a conversão de texto/vírgula para número decimal aceito pelo Banco
+    const limparNumero = (val: string) => {
+      if (!val) return 0;
+      const formatado = val.replace(',', '.');
+      return Number(formatado) || 0;
+    };
+
     const payload = { 
       obra, 
       cidade, 
-      data_registro: new Date().toISOString().split('T')[0],
+      data_registro: dataRegistro,
       clima, 
       equipe: equipe.join(", "),
-      munk_hrs: 0,
-      guindaste_hrs: 0, 
-      horas_trabalhadas: 0, 
-      m3_montado: 0, 
-      qtd_bisnagas_pu: 0, 
-      eixos_montados: "", 
+      munk_hrs: limparNumero(munkHrs),
+      guindaste_hrs: limparNumero(guindasteHrs), 
+      horas_trabalhadas: limparNumero(horasTrabalhadas), 
+      m3_montado: limparNumero(m3Montado), 
+      qtd_bisnagas_pu: limparNumero(qtdBisnagasPu), 
+      eixos_montados: eixosMontados, 
       encunhamento_pilares: encunhamento === 'sim',
       observacoes 
     };
 
-    // INTELIGÊNCIA OFFLINE AQUI
     if (!navigator.onLine) {
       const novaFila = [...pendentes, payload];
       localStorage.setItem('diarios_offline', JSON.stringify(novaFila));
       setPendentes(novaFila);
-      alert("📡 Você está OFFLINE! O diário foi salvo na memória do celular. Clique em 'Sincronizar' quando a internet voltar.");
+      alert("📡 Você está OFFLINE! O diário foi保存 na memória do celular. Clique em 'Sincronizar' quando a internet voltar.");
       setEnviando(false);
       return;
     }
@@ -173,7 +187,6 @@ export default function NovoDiario() {
 
       <div className="relative z-10 w-full max-w-4xl bg-slate-900/60 backdrop-blur-xl border border-slate-700/50 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.6)] overflow-hidden my-4 transition-all duration-500 print:shadow-none print:border-none print:bg-white print:text-black print:my-0">
         
-        {/* AVISO DE OFFLINE - Fica visível se tiver itens pendentes */}
         {pendentes.length > 0 && (
           <div className="bg-orange-500/20 border-b border-orange-500 text-orange-400 p-4 text-center font-bold print:hidden flex flex-col md:flex-row items-center justify-center gap-4">
             ⚠️ Você tem {pendentes.length} diário(s) esperando internet para enviar.
@@ -215,7 +228,7 @@ export default function NovoDiario() {
               </div>
               <div>
                 <label className="block text-sm font-bold text-slate-300 print:text-gray-600 mb-2">Data do Registro</label>
-                <input required type="date" className="w-full bg-slate-950/50 border border-slate-700/50 text-slate-200 rounded-xl p-4 outline-none print:bg-transparent print:border-0 print:border-b print:border-gray-300 print:rounded-none print:px-0 print:py-2 print:text-black" />
+                <input required type="date" value={dataRegistro} onChange={(e) => setDataRegistro(e.target.value)} className="w-full bg-slate-950/50 border border-slate-700/50 text-slate-200 rounded-xl p-4 outline-none print:bg-transparent print:border-0 print:border-b print:border-gray-300 print:rounded-none print:px-0 print:py-2 print:text-black" />
               </div>
             </div>
 
@@ -269,30 +282,30 @@ export default function NovoDiario() {
 
               <div>
                 <label className="block text-sm font-bold text-slate-300 print:text-gray-600 mb-2">Horas Trabalhadas</label>
-                <input type="number" step="0.5" className="w-full bg-slate-950/50 border border-slate-700/50 text-slate-200 rounded-xl p-4 outline-none print:bg-transparent print:border-0 print:border-b print:border-gray-300 print:rounded-none print:px-0 print:py-2 print:text-black" />
+                <input type="text" value={horasTrabalhadas} onChange={(e) => setHorasTrabalhadas(e.target.value)} placeholder="Ex: 8.5" className="w-full bg-slate-950/50 border border-slate-700/50 text-slate-200 rounded-xl p-4 outline-none print:bg-transparent print:border-0 print:border-b print:border-gray-300 print:rounded-none print:px-0 print:py-2 print:text-black" />
               </div>
               <div>
                 <label className="block text-sm font-bold text-slate-300 print:text-gray-600 mb-2">Eixos Montados</label>
-                <input type="text" placeholder="Ex: Eixo A ao G" className="w-full bg-slate-950/50 border border-slate-700/50 text-slate-200 rounded-xl p-4 outline-none print:bg-transparent print:border-0 print:border-b print:border-gray-300 print:rounded-none print:px-0 print:py-2 print:text-black" />
+                <input type="text" value={eixosMontados} onChange={(e) => setEixosMontados(e.target.value)} placeholder="Ex: Eixo A ao G" className="w-full bg-slate-950/50 border border-slate-700/50 text-slate-200 rounded-xl p-4 outline-none print:bg-transparent print:border-0 print:border-b print:border-gray-300 print:rounded-none print:px-0 print:py-2 print:text-black" />
               </div>
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 print:gap-8">
               <div>
                 <label className="block text-sm font-bold text-slate-300 print:text-gray-600 mb-2">Munck / Hrs</label>
-                <input type="number" step="0.5" className="w-full bg-slate-950/50 border border-slate-700/50 text-slate-200 rounded-xl p-4 outline-none print:bg-transparent print:border-0 print:border-b print:border-gray-300 print:rounded-none print:px-0 print:py-2 print:text-black" />
+                <input type="text" value={munkHrs} onChange={(e) => setMunkHrs(e.target.value)} placeholder="0.0" className="w-full bg-slate-950/50 border border-slate-700/50 text-slate-200 rounded-xl p-4 outline-none print:bg-transparent print:border-0 print:border-b print:border-gray-300 print:rounded-none print:px-0 print:py-2 print:text-black" />
               </div>
               <div>
                 <label className="block text-sm font-bold text-slate-300 print:text-gray-600 mb-2">Guindaste / Hrs</label>
-                <input type="number" step="0.5" className="w-full bg-slate-950/50 border border-slate-700/50 text-slate-200 rounded-xl p-4 outline-none print:bg-transparent print:border-0 print:border-b print:border-gray-300 print:rounded-none print:px-0 print:py-2 print:text-black" />
+                <input type="text" value={guindasteHrs} onChange={(e) => setGuindasteHrs(e.target.value)} placeholder="0.0" className="w-full bg-slate-950/50 border border-slate-700/50 text-slate-200 rounded-xl p-4 outline-none print:bg-transparent print:border-0 print:border-b print:border-gray-300 print:rounded-none print:px-0 print:py-2 print:text-black" />
               </div>
               <div>
                 <label className="block text-sm font-bold text-slate-300 print:text-gray-600 mb-2">M³ Montado no dia</label>
-                <input type="number" step="0.01" className="w-full bg-slate-950/50 border border-slate-700/50 text-slate-200 rounded-xl p-4 outline-none print:bg-transparent print:border-0 print:border-b print:border-gray-300 print:rounded-none print:px-0 print:py-2 print:text-black" />
+                <input type="text" value={m3Montado} onChange={(e) => setM3Montado(e.target.value)} placeholder="0.00" className="w-full bg-slate-950/50 border border-slate-700/50 text-slate-200 rounded-xl p-4 outline-none print:bg-transparent print:border-0 print:border-b print:border-gray-300 print:rounded-none print:px-0 print:py-2 print:text-black" />
               </div>
               <div>
                 <label className="block text-sm font-bold text-slate-300 print:text-gray-600 mb-2">Quantidade Bisnagas</label>
-                <input type="number" className="w-full bg-slate-950/50 border border-slate-700/50 text-slate-200 rounded-xl p-4 outline-none print:bg-transparent print:border-0 print:border-b print:border-gray-300 print:rounded-none print:px-0 print:py-2 print:text-black" />
+                <input type="text" value={qtdBisnagasPu} onChange={(e) => setQtdBisnagasPu(e.target.value)} placeholder="0" className="w-full bg-slate-950/50 border border-slate-700/50 text-slate-200 rounded-xl p-4 outline-none print:bg-transparent print:border-0 print:border-b print:border-gray-300 print:rounded-none print:px-0 print:py-2 print:text-black" />
               </div>
             </div>
           </section>
@@ -301,11 +314,11 @@ export default function NovoDiario() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-800/40 border border-slate-700/50 p-6 rounded-xl print:bg-transparent print:border-none print:p-0 print:gap-8">
               <div>
                 <label className="block text-sm font-bold text-yellow-400 print:text-gray-600 mb-2 uppercase">Total Acumulado (m³)</label>
-                <input type="number" step="0.01" className="w-full bg-slate-950/50 border border-slate-700/50 text-slate-200 rounded-xl p-4 outline-none print:bg-transparent print:border-0 print:border-b print:border-gray-300 print:rounded-none print:px-0 print:py-2 print:text-black" />
+                <input type="text" value={totalAcumuladoM3} onChange={(e) => setTotalAcumuladoM3(e.target.value)} placeholder="0.00" className="w-full bg-slate-950/50 border border-slate-700/50 text-slate-200 rounded-xl p-4 outline-none print:bg-transparent print:border-0 print:border-b print:border-gray-300 print:rounded-none print:px-0 print:py-2 print:text-black" />
               </div>
               <div>
                 <label className="block text-sm font-bold text-yellow-400 print:text-gray-600 mb-2 uppercase">Quantidade Total (PU)</label>
-                <input type="number" className="w-full bg-slate-950/50 border border-slate-700/50 text-slate-200 rounded-xl p-4 outline-none print:bg-transparent print:border-0 print:border-b print:border-gray-300 print:rounded-none print:px-0 print:py-2 print:text-black" />
+                <input type="text" value={qtdTotalPu} onChange={(e) => setQtdTotalPu(e.target.value)} placeholder="0" className="w-full bg-slate-950/50 border border-slate-700/50 text-slate-200 rounded-xl p-4 outline-none print:bg-transparent print:border-0 print:border-b print:border-gray-300 print:rounded-none print:px-0 print:py-2 print:text-black" />
               </div>
             </div>
           </section>
@@ -370,13 +383,15 @@ export default function NovoDiario() {
               </div>
 
               {fotos.length > 0 && (
-                <div className={`mt-4 grid gap-4 print:gap-2 ${
+                /* CORREÇÃO DO PDF: Adicionado print:break-inside-avoid para o bloco de fotos mudar de página inteiro caso não caiba na primeira folha */
+                <div className={`mt-4 grid gap-4 print:gap-2 print:break-inside-avoid ${
                   fotos.length === 1 ? 'grid-cols-1 max-w-sm mx-auto' : 
                   fotos.length === 2 ? 'grid-cols-2' : 
                   'grid-cols-3'
                 }`}>
                   {fotos.map((url, i) => (
-                    <div key={i} className="relative rounded-xl overflow-hidden border border-slate-700/50 print:border-none print:rounded-none bg-slate-900 flex justify-center">
+                    /* CORREÇÃO DO PDF: Adicionado print:break-inside-avoid em cada card individual também */
+                    <div key={i} className="relative rounded-xl overflow-hidden border border-slate-700/50 print:border-none print:rounded-none bg-slate-900 flex justify-center print:break-inside-avoid">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={url} alt={`Evidência ${i + 1}`} className="w-full h-auto object-cover print:max-h-[250px] print:object-contain" />
                       <button type="button" onClick={() => removerFoto(i)} className="absolute top-2 right-2 bg-red-600 hover:bg-red-700 text-white w-8 h-8 flex items-center justify-center rounded-full font-bold shadow-lg print:hidden transition-colors">
