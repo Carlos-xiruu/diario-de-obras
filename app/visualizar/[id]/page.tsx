@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import Link from 'next/link';
 
 export default function VisualizarDiario() {
   const params = useParams();
+  const router = useRouter();
   const id = params?.id as string;
 
   const [item, setItem] = useState<any>(null);
@@ -36,7 +38,7 @@ export default function VisualizarDiario() {
   }, [id]);
 
   if (carregando) {
-    return <main className="p-8 text-center text-slate-500 font-bold min-h-screen bg-white">Carregando relatório...</main>;
+    return <main className="p-8 text-center text-slate-500 font-bold min-h-screen bg-white">A carregar relatório...</main>;
   }
 
   if (erro || !item) {
@@ -44,6 +46,7 @@ export default function VisualizarDiario() {
       <main className="p-8 text-red-500 min-h-screen bg-white">
         <h1 className="text-xl font-bold">Erro ao carregar diário</h1>
         <p>{erro || "Diário não encontrado no banco de dados."}</p>
+        <button onClick={() => router.back()} className="mt-4 bg-slate-800 text-white px-4 py-2 rounded">Voltar</button>
       </main>
     );
   }
@@ -52,13 +55,30 @@ export default function VisualizarDiario() {
     <main className="p-8 bg-white text-slate-900 min-h-screen">
       <div className="max-w-3xl mx-auto">
         
-        {/* Botão de imprimir que some na hora de gerar o PDF */}
-        <button 
-          onClick={() => window.print()}
-          className="print:hidden bg-blue-600 text-white px-6 py-3 rounded-lg font-bold mb-8 hover:bg-blue-700 transition-colors shadow-lg"
-        >
-          Salvar como PDF / Imprimir
-        </button>
+        {/* Barra de Ações que fica invisível no PDF */}
+        <div className="print:hidden flex flex-wrap gap-3 mb-8">
+          <button 
+            onClick={() => router.back()}
+            className="bg-slate-200 text-slate-700 px-5 py-3 rounded-lg font-bold hover:bg-slate-300 transition-colors"
+          >
+            &larr; Voltar
+          </button>
+
+          <button 
+            onClick={() => window.print()}
+            className="bg-blue-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-blue-700 transition-colors shadow-md"
+          >
+            📄 Salvar como PDF / Imprimir
+          </button>
+
+          {/* NOVO: Botão para ir para a página de edição */}
+          <Link 
+            href={`/editar/${id}`}
+            className="bg-amber-500 text-white px-6 py-3 rounded-lg font-bold hover:bg-amber-600 transition-colors text-center shadow-md"
+          >
+            ✏️ Editar Dados
+          </Link>
+        </div>
 
         <h1 className="text-3xl font-black mb-6 uppercase border-b-2 border-slate-900 pb-4">
           Diário de Obra - {item.obra || "Sem nome"}
@@ -87,9 +107,6 @@ export default function VisualizarDiario() {
         <div className="mt-8 border-t border-slate-300 pt-6">
           <h2 className="font-bold text-lg mb-2">Observações</h2>
           <p className="bg-slate-50 p-4 rounded border border-slate-200 whitespace-pre-line">{item.observacoes || "Sem observações."}</p>
-          
-          <h2 className="font-bold text-lg mt-6 mb-2">Informações Adicionais</h2>
-          <p className="bg-slate-50 p-4 rounded border border-slate-200 whitespace-pre-line">{item.informacoes_adicionais || "Nenhuma informação adicional."}</p>
         </div>
       </div>
     </main>
