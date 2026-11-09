@@ -2,39 +2,38 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
+import { getErrorMessage } from '@/lib/errors';
+import { buscarDiario } from '@/lib/services/diarios';
+import { listarItensMontagemDiario } from '@/lib/services/montagem';
+import type { Diario } from '@/lib/types';
 
 export default function VisualizarDiario() {
   const params = useParams();
   const router = useRouter();
   const id = params?.id as string;
 
-  const [item, setItem] = useState<any>(null);
+  const [item, setItem] = useState<Diario | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(true);
+  const [itens, setItens] = useState<Awaited<ReturnType<typeof listarItensMontagemDiario>>>([]);
 
   useEffect(() => {
     if (!id) return;
 
-    async function buscarDiario() {
+    async function carregarDiario() {
       try {
-        const { data, error } = await supabase
-          .from('diarios')
-          .select('*')
-          .eq('id', id)
-          .single();
-
-        if (error) throw error;
-        setItem(data);
-      } catch (err: any) {
-        setErro(err.message);
+        const [diario, itensMontagem] = await Promise.all([buscarDiario(id), listarItensMontagemDiario(id)]);
+        setItem(diario);
+        setItens(itensMontagem);
+      } catch (error) {
+        setErro(getErrorMessage(error, 'Não foi possível carregar o diário.'));
       } finally {
         setCarregando(false);
       }
     }
 
-    buscarDiario();
+    carregarDiario();
   }, [id]);
 
   if (carregando) {
@@ -64,12 +63,12 @@ export default function VisualizarDiario() {
             &larr; Voltar
           </button>
 
-          <button 
-            onClick={() => window.print()}
+          <a
+            href={`/api/relatorios/diarios/${id}`}
             className="bg-blue-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-blue-700 transition-colors shadow-md"
           >
-            📄 Salvar como PDF / Imprimir
-          </button>
+            Baixar PDF
+          </a>
 
           {/* NOVO: Botão para ir para a página de edição */}
           <Link 
@@ -83,6 +82,7 @@ export default function VisualizarDiario() {
         <h1 className="text-3xl font-black mb-6 uppercase border-b-2 border-slate-900 pb-4">
           Diário de Obra - {item.obra || "Sem nome"}
         </h1>
+        <p className={`mb-6 inline-block rounded-full px-4 py-2 text-sm font-black uppercase ${item.montagem_status === 'confirmado' ? 'bg-emerald-100 text-emerald-800' : item.montagem_status === 'cancelado' ? 'bg-red-100 text-red-800' : item.montagem_status === 'legado' ? 'bg-slate-200 text-slate-700' : 'bg-amber-100 text-amber-800'}`}>Estado: {item.montagem_status ?? 'legado'}</p>
 
         <div className="grid grid-cols-2 gap-6 mb-8 text-sm">
           <p><strong>Cidade:</strong> {item.cidade}</p>
@@ -97,12 +97,15 @@ export default function VisualizarDiario() {
             <p><strong>Horas Munck:</strong> {item.munk_hrs}</p>
             <p><strong>Horas Guindaste:</strong> {item.guindaste_hrs}</p>
             <p><strong>Horas Trabalhadas:</strong> {item.horas_trabalhadas}</p>
-            <p><strong>M³ Montado:</strong> {item.m3_montado}</p>
+            <p><strong>M³ manual:</strong> {item.m3_montado}</p>
+            <p><strong>M³ estruturado:</strong> {item.volume_estruturado_m3 ?? 0}</p>
             <p><strong>Qtd Bisnagas PU:</strong> {item.qtd_bisnagas_pu}</p>
             <p><strong>Eixos Montados:</strong> {item.eixos_montados}</p>
             <p><strong>Encunhamento Pilares:</strong> {item.encunhamento_pilares ? "Sim" : "Não"}</p>
           </div>
         </div>
+
+        {itens.length > 0 && <section className="mt-8 border-t border-slate-300 pt-6"><h2 className="mb-3 text-lg font-bold">Peças montadas no dia</h2><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b"><th className="py-2">Pavimento</th><th>Código</th><th>Tipo</th><th>Qtd.</th><th>Vol. unit.</th><th>Total</th></tr></thead><tbody>{itens.map((peca) => <tr key={peca.obra_peca_id} className="border-b"><td className="py-2">{peca.localizacao_snapshot}</td><td className="font-bold">{peca.codigo_snapshot}</td><td>{peca.tipo_snapshot}</td><td>{peca.quantidade}</td><td>{Number(peca.volume_unitario_m3_snapshot).toLocaleString('pt-BR')} m³</td><td>{Number(peca.volume_total_m3).toLocaleString('pt-BR')} m³</td></tr>)}</tbody><tfoot><tr className="font-bold"><td colSpan={3}>Total</td><td>{itens.reduce((total, peca) => total + peca.quantidade, 0)}</td><td /><td>{itens.reduce((total, peca) => total + Number(peca.volume_total_m3), 0).toLocaleString('pt-BR')} m³</td></tr></tfoot></table></div>{item.montagem_status === 'cancelado' && <p className="mt-3 text-sm text-red-700">Montagem cancelada: os itens são exibidos como histórico e o saldo foi devolvido.</p>}</section>}
 
         <div className="mt-8 border-t border-slate-300 pt-6">
           <h2 className="font-bold text-lg mb-2">Observações</h2>

@@ -1,15 +1,22 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import { Montserrat, Inter } from "next/font/google";
+import { getErrorMessage } from '@/lib/errors';
+import { buscarAcessoAtual } from '@/lib/services/acessos';
+import { atualizarObra, listarObras } from '@/lib/services/obras';
+import type { Obra, PapelUsuario } from '@/lib/types';
+import { diarioUrl } from '@/lib/obras-navigation';
+import { canManageObras } from '@/lib/permissions';
 
 const montserrat = Montserrat({ subsets: ["latin"], weight: ["700", "800", "900"] });
 const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600", "700"] });
 
 export default function Home() {
-  const [obras, setObras] = useState<any[]>([]);
+  const [obras, setObras] = useState<Obra[]>([]);
+  const [erro, setErro] = useState<string | null>(null);
+  const [papel, setPapel] = useState<PapelUsuario | null>(null);
   
   // Estados para gerenciar a edição
   const [editandoId, setEditandoId] = useState<string | null>(null);
@@ -18,24 +25,37 @@ export default function Home() {
 
   // Busca as obras no banco de dados assim que a tela abre
   const carregarObras = async () => {
-    const { data } = await supabase.from('obras').select('*').order('id', { ascending: true });
-    if (data) setObras(data);
-  };
-
-  useEffect(() => {
-    carregarObras();
-  }, []);
-
-  // Função para Excluir
-  const handleExcluir = async (id: string, nome: string) => {
-    if (confirm(`Tem certeza que deseja remover o canteiro "${nome}"?`)) {
-      await supabase.from('obras').delete().eq('id', id);
-      carregarObras(); // Atualiza a lista automaticamente
+    try {
+      setErro(null);
+      setObras(await listarObras());
+    } catch (error) {
+      setErro(getErrorMessage(error, 'Não foi possível carregar as obras.'));
     }
   };
 
+  const carregarAcesso = async () => {
+    try {
+      const acesso = await buscarAcessoAtual();
+      setPapel(acesso?.ativo ? acesso.papel : null);
+      if (!acesso?.ativo) {
+        setErro('Sua conta não está autorizada para acessar os dados da empresa.');
+      }
+    } catch (error) {
+      setErro(getErrorMessage(error, 'Não foi possível validar suas permissões.'));
+    }
+  };
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void carregarObras();
+      void carregarAcesso();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, []);
+
   // Função para abrir o modo de Edição
-  const iniciarEdicao = (obra: any) => {
+  const iniciarEdicao = (obra: Obra) => {
     setEditandoId(obra.id);
     setEditNome(obra.nome_obra);
     setEditCidade(obra.cidade);
@@ -45,13 +65,15 @@ export default function Home() {
   const salvarEdicao = async () => {
     if (!editNome || !editCidade) return;
     
-    await supabase
-      .from('obras')
-      .update({ nome_obra: editNome, cidade: editCidade })
-      .eq('id', editandoId);
-      
-    setEditandoId(null);
-    carregarObras(); // Atualiza a lista com o nome novo
+    if (!editandoId) return;
+
+    try {
+      await atualizarObra(editandoId, { nome_obra: editNome, cidade: editCidade });
+      setEditandoId(null);
+      await carregarObras();
+    } catch (error) {
+      alert(`Erro ao atualizar obra: ${getErrorMessage(error, 'Tente novamente.')}`);
+    }
   };
 
   return (
@@ -73,6 +95,8 @@ export default function Home() {
           CANTEIROS ATIVOS
         </h1>
         <p className="text-blue-400 mb-10 font-bold tracking-widest uppercase text-sm">Selecione a obra para registrar</p>
+
+        {erro && <p role="alert" className="mb-6 rounded-xl border border-red-500/50 bg-red-950/40 p-4 font-bold text-red-300">{erro}</p>}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           
@@ -100,20 +124,14 @@ export default function Home() {
                 // --- TELA ORIGINAL (Seu design mantido) ---
                 <>
                   {/* Botões de Ação (Aparecem no hover no PC, sempre visíveis no celular) */}
-                  <div className="absolute top-4 right-4 flex gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 z-20">
+                  {canManageObras(papel) && <div className="absolute top-4 right-4 flex gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 z-20">
                     <button 
                       onClick={() => iniciarEdicao(obra)} 
                       className="w-8 h-8 flex items-center justify-center bg-slate-800/80 border border-slate-600 hover:border-blue-400 text-slate-300 hover:text-blue-400 rounded-lg transition-all backdrop-blur-sm"
                     >
                       ✏️
                     </button>
-                    <button 
-                      onClick={() => handleExcluir(obra.id, obra.nome_obra)} 
-                      className="w-8 h-8 flex items-center justify-center bg-slate-800/80 border border-slate-600 hover:border-red-500 text-slate-300 hover:text-red-400 rounded-lg transition-all backdrop-blur-sm"
-                    >
-                      🗑️
-                    </button>
-                  </div>
+                  </div>}
 
                   <div>
                     <h2 className={`${montserrat.className} text-2xl font-bold text-slate-100 mb-2 group-hover:text-blue-400 transition-colors pr-16`}>
@@ -124,12 +142,18 @@ export default function Home() {
                       {obra.cidade}
                     </p>
                   </div>
-                  <div className="mt-8">
+                  <div className="mt-8 grid gap-3">
                     <Link 
-                      href={`/diario?obra=${encodeURIComponent(obra.nome_obra)}&cidade=${encodeURIComponent(obra.cidade)}`} 
+                      href={diarioUrl(obra)}
                       className={`${montserrat.className} inline-block w-full text-center bg-blue-500/10 border border-blue-500/30 text-blue-400 font-bold tracking-widest py-4 rounded-xl hover:bg-blue-600 hover:text-white transition-all duration-300 hover:shadow-[0_0_15px_rgba(59,130,246,0.5)]`}
                     >
                       ABRIR DIÁRIO
+                    </Link>
+                    <Link href={`/obras/${obra.id}/pecas`} className={`${montserrat.className} inline-block w-full text-center border border-slate-600 text-slate-300 font-bold tracking-widest py-3 rounded-xl hover:bg-slate-800 transition-all duration-300`}>
+                      PEÇAS
+                    </Link>
+                    <Link href={`/obras/${obra.id}/dashboard`} className={`${montserrat.className} inline-block w-full text-center border border-slate-600 text-slate-300 font-bold tracking-widest py-3 rounded-xl hover:bg-slate-800 transition-all duration-300`}>
+                      DASHBOARD
                     </Link>
                   </div>
                 </>
@@ -138,10 +162,10 @@ export default function Home() {
           ))}
           
           {/* Botão Fixo de Nova Obra */}
-          <Link href="/nova-obra" className="bg-slate-900/30 backdrop-blur-xl border-2 border-dashed border-slate-700 rounded-2xl p-6 flex flex-col items-center justify-center text-slate-500 hover:text-blue-400 hover:border-blue-500/50 transition-all duration-300 min-h-[200px] cursor-pointer">
+          {canManageObras(papel) && <Link href="/nova-obra" className="bg-slate-900/30 backdrop-blur-xl border-2 border-dashed border-slate-700 rounded-2xl p-6 flex flex-col items-center justify-center text-slate-500 hover:text-blue-400 hover:border-blue-500/50 transition-all duration-300 min-h-[200px] cursor-pointer">
             <span className="text-4xl mb-2 font-light">+</span>
             <span className={`${montserrat.className} font-bold tracking-widest text-sm`}>CADASTRAR OBRA</span>
-          </Link>
+          </Link>}
           
           {/* Botão de Histórico */}
           <Link href="/historico" className={`${montserrat.className} flex items-center justify-center gap-2 w-full text-center bg-slate-800/50 border border-slate-700 text-slate-300 font-bold tracking-widest py-4 rounded-xl hover:bg-slate-700 transition-all duration-300`}>

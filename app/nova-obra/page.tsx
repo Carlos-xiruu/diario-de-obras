@@ -1,10 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Montserrat, Inter } from "next/font/google";
-import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { getErrorMessage } from '@/lib/errors';
+import { buscarAcessoAtual } from '@/lib/services/acessos';
+import { criarObra } from '@/lib/services/obras';
+import { canManageObras } from '@/lib/permissions';
 
 const montserrat = Montserrat({ subsets: ["latin"], weight: ["700", "800", "900"] });
 const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600", "700"] });
@@ -14,25 +17,42 @@ export default function NovaObra() {
   const [nome, setNome] = useState("");
   const [cidade, setCidade] = useState("");
   const [salvando, setSalvando] = useState(false);
+  const [autorizado, setAutorizado] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void buscarAcessoAtual().then((acesso) => {
+        if (acesso?.ativo && canManageObras(acesso.papel)) {
+          setAutorizado(true);
+          return;
+        }
+        router.replace('/');
+      }).catch(() => router.replace('/'));
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [router]);
 
   const cadastrar = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!autorizado) return;
     setSalvando(true);
 
-    const { error } = await supabase
-      .from('obras')
-      .insert([{ nome_obra: nome, cidade: cidade }]);
-
-    setSalvando(false);
-
-    if (error) {
-      alert("Erro ao cadastrar obra: " + error.message);
-    } else {
+    try {
+      await criarObra({ nome_obra: nome, cidade });
       alert("Obra cadastrada com sucesso!");
-      router.push("/"); // Manda de volta para a tela inicial
-      router.refresh(); // Atualiza a lista de obras
+      router.push("/");
+      router.refresh();
+    } catch (error) {
+      alert(`Erro ao cadastrar obra: ${getErrorMessage(error, 'Tente novamente.')}`);
+    } finally {
+      setSalvando(false);
     }
   };
+
+  if (!autorizado) {
+    return <main className="min-h-screen bg-[#020617] text-slate-300 flex items-center justify-center font-bold">Verificando permissões...</main>;
+  }
 
   return (
     <main className={`relative min-h-screen p-4 md:p-8 flex justify-center items-center text-slate-200 ${inter.className}`}>

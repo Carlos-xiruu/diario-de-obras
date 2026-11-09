@@ -4,7 +4,13 @@ import { useState, useEffect } from "react";
 import { Montserrat, Inter } from "next/font/google";
 import imageCompression from 'browser-image-compression';
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
+import { buildDiarioPayload } from '@/lib/diario-payload';
+import { atualizarDiario, criarDiario } from '@/lib/services/diarios';
+import { aplicarMontagemDiario, type MontagemSelecionada } from '@/lib/services/montagem';
+import { MontagemPecas } from '@/app/components/MontagemPecas';
+import { ConfirmDialog } from '@/app/components/ConfirmDialog';
+import { getSupabaseClient } from '@/lib/supabase';
+import type { DiarioInput } from '@/lib/types';
 
 const montserrat = Montserrat({ subsets: ["latin"], weight: ["700", "800", "900"] });
 const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600", "700"] });
@@ -18,6 +24,7 @@ export default function NovoDiario() {
   const [comprimindo, setComprimindo] = useState(false);
   const [equipe, setEquipe] = useState<string[]>([]);
   const [nomeAtual, setNomeAtual] = useState("");
+  const [obraId, setObraId] = useState<string | null>(null);
   const [obra, setObra] = useState("");
   const [cidade, setCidade] = useState("");
   const [idSalvo, setIdSalvo] = useState<string | null>(null);
@@ -32,16 +39,24 @@ export default function NovoDiario() {
   const [qtdBisnagasPu, setQtdBisnagasPu] = useState("");
   const [totalAcumuladoM3, setTotalAcumuladoM3] = useState("");
   const [qtdTotalPu, setQtdTotalPu] = useState("");
+  const [pecasMontadas, setPecasMontadas] = useState<MontagemSelecionada[]>([]);
+  const [confirmacaoAberta, setConfirmacaoAberta] = useState(false);
+  const [mensagem, setMensagem] = useState<string | null>(null);
 
-  const [pendentes, setPendentes] = useState<any[]>([]);
+  const [pendentes, setPendentes] = useState<DiarioInput[]>([]);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("obra")) setObra(params.get("obra") || "");
-    if (params.get("cidade")) setCidade(params.get("cidade") || "");
+    const timer = window.setTimeout(() => {
+      const params = new URLSearchParams(window.location.search);
+      setObraId(params.get("obraId"));
+      if (params.get("obra")) setObra(params.get("obra") || "");
+      if (params.get("cidade")) setCidade(params.get("cidade") || "");
 
-    const filaOffline = JSON.parse(localStorage.getItem('diarios_offline') || '[]');
-    setPendentes(filaOffline);
+      const filaOffline = JSON.parse(localStorage.getItem('diarios_offline') || '[]') as DiarioInput[];
+      setPendentes(filaOffline);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, []);
 
   const adicionarMontador = () => {
@@ -70,7 +85,7 @@ export default function NovoDiario() {
       }
 
       setFotos((prev) => [...prev, ...novasFotosUrls]);
-    } catch (error) {
+    } catch {
       alert("Erro ao processar as imagens.");
     } finally {
       setComprimindo(false);
@@ -105,13 +120,18 @@ export default function NovoDiario() {
 
   const sincronizarPendentes = async () => {
     if (!navigator.onLine) {
+      if (pecasMontadas.length > 0) {
+        alert('A confirmação de peças exige conexão. O saldo não foi alterado.');
+        setEnviando(false);
+        return;
+      }
       alert("Você ainda está sem internet! Conecte-se a uma rede para sincronizar.");
       return;
     }
 
     setEnviando(true);
     try {
-      const { error } = await supabase.from('diarios').insert(pendentes);
+      const { error } = await getSupabaseClient().from('diarios').insert(pendentes);
       if (error) throw error;
 
       alert(`${pendentes.length} diário(s) sincronizado(s) com sucesso!`);
@@ -129,27 +149,10 @@ export default function NovoDiario() {
     setEnviando(true);
 
     // CORREÇÃO: Tratando a conversão de texto/vírgula para número decimal aceito pelo Banco
-    const limparNumero = (val: string) => {
-      if (!val) return 0;
-      const formatado = val.replace(',', '.');
-      return Number(formatado) || 0;
-    };
-
-    const payload = { 
-      obra, 
-      cidade, 
-      data_registro: dataRegistro,
-      clima, 
-      equipe: equipe.join(", "),
-      munk_hrs: limparNumero(munkHrs),
-      guindaste_hrs: limparNumero(guindasteHrs), 
-      horas_trabalhadas: limparNumero(horasTrabalhadas), 
-      m3_montado: limparNumero(m3Montado), 
-      qtd_bisnagas_pu: limparNumero(qtdBisnagasPu), 
-      eixos_montados: eixosMontados, 
-      encunhamento_pilares: encunhamento === 'sim',
-      observacoes 
-    };
+    const payload = buildDiarioPayload({
+      obraId, obra, cidade, dataRegistro, clima, equipe, horasTrabalhadas, eixosMontados,
+      munkHrs, guindasteHrs, m3Montado, qtdBisnagasPu, encunhamento, observacoes,
+    });
 
     if (!navigator.onLine) {
       const novaFila = [...pendentes, payload];
@@ -161,20 +164,35 @@ export default function NovoDiario() {
     }
 
     try {
-      const { data, error } = await supabase.from('diarios').insert([payload]).select();
+      const diarioId = idSalvo ?? (await criarDiario(payload)).id;
+      if (idSalvo) await atualizarDiario(idSalvo, payload);
+      if (pecasMontadas.length > 0) await aplicarMontagemDiario(diarioId, pecasMontadas, 'rascunho', crypto.randomUUID());
+      setIdSalvo(diarioId);
 
-      if (error) throw error;
-      
-      if (data && data.length > 0) {
-        setIdSalvo(data[0].id);
-      }
-
-      alert("Diário gravado com sucesso no banco de dados!");
+      alert("Diário salvo como rascunho no banco de dados!");
     } catch (error) {
       alert("Erro ao salvar: " + (error as Error).message);
     } finally {
       setEnviando(false);
     }
+  };
+
+  const confirmarDiario = async () => {
+    if (!idSalvo || pecasMontadas.length === 0) return;
+    if (!navigator.onLine) { setMensagem('A confirmação exige conexão com o servidor.'); return; }
+    setConfirmacaoAberta(true);
+  };
+
+  const executarConfirmacao = async () => {
+    if (!idSalvo) return;
+    setEnviando(true);
+    try {
+      await aplicarMontagemDiario(idSalvo, pecasMontadas, 'confirmar', crypto.randomUUID());
+      setMensagem('Diário confirmado e saldo atualizado no servidor.');
+      setConfirmacaoAberta(false);
+    } catch (error) {
+      setMensagem('A confirmação não foi concluída: ' + (error as Error).message);
+    } finally { setEnviando(false); }
   };
 
   return (
@@ -210,6 +228,7 @@ export default function NovoDiario() {
         </div>
 
         <form onSubmit={salvarDiario} className="p-6 md:p-10 space-y-10 print:p-4 print:space-y-6">
+          {mensagem && <div role="status" className="rounded-xl border border-blue-500/60 bg-blue-950/50 p-4 text-sm text-blue-100"><div className="flex items-start justify-between gap-3"><span>{mensagem}</span><button type="button" aria-label="Fechar mensagem" onClick={() => setMensagem(null)} className="font-bold text-blue-200">×</button></div></div>}
           
           <section>
             <div className="flex items-center gap-3 mb-6 print:mb-4">
@@ -248,6 +267,8 @@ export default function NovoDiario() {
               <p className="font-bold text-gray-600">Clima no dia: <span className="font-normal text-black ml-2 uppercase">{clima || "Não informado"}</span></p>
             </div>
           </section>
+
+          <MontagemPecas obraId={obraId} value={pecasMontadas} onChange={setPecasMontadas} />
 
           <section>
             <div className="flex items-center gap-3 mb-6 pt-6 border-t border-slate-700/50 print:border-black print:pt-6 print:mb-4">
@@ -406,8 +427,9 @@ export default function NovoDiario() {
 
           <div className="pt-8 space-y-4 print:hidden border-t border-slate-700/50 mt-8">
             <button type="submit" disabled={enviando} className={`${montserrat.className} w-full font-black tracking-widest rounded-xl text-lg uppercase px-5 py-5 text-center transition-all duration-300 bg-gradient-to-r from-blue-500 to-blue-700 text-white shadow-[0_0_20px_rgba(59,130,246,0.4)]`}>
-              {enviando ? "Processando..." : "Salvar no Banco de Dados"}
+              {enviando ? "Processando..." : "Salvar rascunho"}
             </button>
+            {idSalvo && pecasMontadas.length > 0 && <button type="button" onClick={confirmarDiario} disabled={enviando} className={`${montserrat.className} w-full font-black tracking-widest rounded-xl text-lg uppercase px-5 py-5 text-center bg-emerald-600 text-white`}>Confirmar diário e debitar peças</button>}
             <div className="grid grid-cols-2 gap-4">
               <button type="button" onClick={exportarPDF} className={`${montserrat.className} w-full font-bold tracking-widest rounded-xl text-sm uppercase px-5 py-4 border border-slate-600 text-slate-300 hover:bg-slate-800 transition-colors`}>
                 📄 Salvar PDF
@@ -420,6 +442,7 @@ export default function NovoDiario() {
 
         </form>
       </div>
+      <ConfirmDialog open={confirmacaoAberta} title="Confirmar diário" description="As peças selecionadas serão debitadas do saldo da obra. Esta operação fica registrada na auditoria." confirmLabel="Confirmar e debitar" busy={enviando} onCancel={() => setConfirmacaoAberta(false)} onConfirm={() => void executarConfirmacao()} />
     </main>
   );
 }
