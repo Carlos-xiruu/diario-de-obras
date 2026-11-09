@@ -26,7 +26,7 @@
 - A importacao historica nao sera confirmada enquanto houver ambiguidade entre a planilha e os diarios legados.
 - E2E requer provisionar usuarios/sessoes isoladas na stack local.
 - A validação HTTP autenticada dos PDFs requer iniciar o Supabase local; não houve conexão com ambiente remoto.
-- O Playwright executou contra Supabase local e navegador Chromium, mas o redirecionamento após login continua retornando a `/login`: o endpoint local cria o cookie de sessão, porém o `proxy` não reconhece essa sessão na requisição seguinte. Não publique até resolver esta incompatibilidade de sessão SSR; os testes E2E falham por esse motivo.
+- A configuração de desenvolvimento precisa acessar a aplicação por `127.0.0.1`, declarado em `allowedDevOrigins`; sem isso o HMR bloqueava a hidratação do React e o submit de login ocorria como formulário nativo, sem executar o handler nem persistir o cookie SSR.
 
 ## Testes Executados
 
@@ -48,7 +48,7 @@
 - `supabase db lint`: aprovado.
 - `supabase/tests/catalogo-pecas-local.sql`, `catalogo-reimport-local.sql`, `montagem-diaria-local.sql`, `rls-local.sql` e `montagem-concorrencia-local.mjs`: aprovados na stack local.
 - `supabase/tests/catalogo-aedifica-local.mjs`: aprovado, com 284 grupos, 904 unidades e 762,52 m³.
-- `npm run test:e2e`: executado e falhou em 2 cenários pelo bloqueio de sessão SSR acima.
+- `npm run test:e2e`: o login SSR, bloqueio de visitante e persistência após navegação foram aprovados. O cenário completo de catálogo foi executado novamente; a confirmação da importação excedeu a espera inicial do teste e o timeout foi ampliado, mas a reexecução completa final não coube nesta sessão.
 
 ## Publicação segura
 

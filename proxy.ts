@@ -16,15 +16,17 @@ export async function proxy(request: NextRequest) {
       getAll() {
         return request.cookies.getAll()
       },
-      setAll(cookiesToSet) {
+      setAll(cookiesToSet, headers) {
         cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
         response = NextResponse.next({ request })
         cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options))
+        Object.entries(headers).forEach(([key, value]) => response.headers.set(key, value))
       },
     },
   })
 
-  const { data: { user } } = await supabase.auth.getUser()
+  const { data } = await supabase.auth.getClaims()
+  const claims = data?.claims
   const isLoginPage = request.nextUrl.pathname === '/login'
   const isPwaAsset = request.nextUrl.pathname === '/manifest.json'
     || request.nextUrl.pathname === '/sw.js'
@@ -32,10 +34,16 @@ export async function proxy(request: NextRequest) {
     || request.nextUrl.pathname === '/og-image.png'
     || request.nextUrl.pathname === '/favicon.ico'
 
-  if (!user && !isLoginPage && !isPwaAsset && request.nextUrl.pathname !== '/api/auth/login') {
+  if (!claims && !isLoginPage && !isPwaAsset && request.nextUrl.pathname !== '/api/auth/login' && request.nextUrl.pathname !== '/api/auth/logout') {
     const loginUrl = request.nextUrl.clone()
     loginUrl.pathname = '/login'
-    return NextResponse.redirect(loginUrl)
+    const redirect = NextResponse.redirect(loginUrl)
+    response.cookies.getAll().forEach((cookie) => redirect.cookies.set(cookie))
+    for (const header of ['cache-control', 'expires', 'pragma']) {
+      const value = response.headers.get(header)
+      if (value) redirect.headers.set(header, value)
+    }
+    return redirect
   }
 
   return response
