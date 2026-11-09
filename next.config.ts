@@ -10,8 +10,8 @@ const withPWA = withPWAInit({
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Essa linha abaixo silencia o erro e diz pro Next.js 16 ficar tranquilo
-  turbopack: {}, 
+  turbopack: {},
+  allowedDevOrigins: ['127.0.0.1'],
 };
 
 export default withPWA(nextConfig);

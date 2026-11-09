@@ -1,47 +1,36 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   LineChart, Line
 } from 'recharts';
+import { getErrorMessage } from '@/lib/errors';
+import { carregarMetricasDashboard, type DashboardMetricas } from '@/lib/services/dashboard';
+
+interface ResumoObra {
+  obra: string
+  m3_total: number
+  horas_munck: number
+  horas_guindaste: number
+}
 
 export default function Dashboard() {
-  const [dadosGrafico, setDadosGrafico] = useState<any[]>([]);
+  const [dadosGrafico, setDadosGrafico] = useState<ResumoObra[]>([]);
   const [carregando, setCarregando] = useState(true);
+  const [erro, setErro] = useState<string | null>(null);
+  const [metricas, setMetricas] = useState<DashboardMetricas | null>(null);
 
   useEffect(() => {
     async function buscarDados() {
       try {
-        const { data, error } = await supabase.from('diarios').select('*');
-        if (error) throw error;
-
-        // Lógica para agrupar e somar os dados por Obra
-        const resumoPorObra: Record<string, any> = {};
-
-        data?.forEach((diario) => {
-          const nomeObra = diario.obra || "Não identificada";
-          
-          if (!resumoPorObra[nomeObra]) {
-            resumoPorObra[nomeObra] = {
-              obra: nomeObra,
-              m3_total: 0,
-              horas_munck: 0,
-              horas_guindaste: 0
-            };
-          }
-
-          resumoPorObra[nomeObra].m3_total += Number(diario.m3_montado) || 0;
-          resumoPorObra[nomeObra].horas_munck += Number(diario.munk_hrs) || 0;
-          resumoPorObra[nomeObra].horas_guindaste += Number(diario.guindaste_hrs) || 0;
-        });
-
-        // Transforma o objeto em um array para o Recharts ler
-        setDadosGrafico(Object.values(resumoPorObra));
+        const resumo = await carregarMetricasDashboard();
+        setMetricas(resumo);
+        setDadosGrafico(resumo.porObra.map((item) => ({ obra: item.obra, m3_total: item.volume, horas_munck: item.munck, horas_guindaste: item.guindaste })));
       } catch (error) {
         console.error("Erro ao buscar dados:", error);
+        setErro(getErrorMessage(error, 'Não foi possível carregar os indicadores.'));
       } finally {
         setCarregando(false);
       }
@@ -68,11 +57,16 @@ export default function Dashboard() {
           </Link>
         </div>
 
-        {dadosGrafico.length === 0 ? (
+        {erro ? (
+          <div role="alert" className="text-center py-20 bg-red-950/40 border border-red-500/50 rounded-xl text-red-300">
+            <p>{erro}</p>
+          </div>
+        ) : dadosGrafico.length === 0 ? (
           <div className="text-center py-20 bg-slate-900 border border-slate-700 rounded-xl">
             <p>Não há dados suficientes para gerar os gráficos.</p>
           </div>
         ) : (
+          <><section className="mb-8 grid grid-cols-2 gap-3 md:grid-cols-4">{[['Obras', metricas?.obras], ['Peças montadas', `${metricas?.montadas}/${metricas?.previstas}`], ['Volume montado', `${metricas?.volumeMontado.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} m³`], ['Saldo', `${metricas?.pendentes} peças`], ['Munck', `${metricas?.munck} h`], ['Guindaste', `${metricas?.guindaste} h`], ['Horas trabalhadas', `${metricas?.horas} h`], ['Execução', `${metricas?.previstas ? ((metricas.montadas / metricas.previstas) * 100).toFixed(1) : 0}%`]].map(([label, value]) => <div key={String(label)} className="rounded-xl border border-slate-700 bg-slate-900 p-4"><p className="text-xs uppercase text-slate-400">{label}</p><p className="mt-1 text-xl font-black text-white">{value}</p></div>)}</section>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             
             {/* Gráfico 1: Volume Montado (m³) */}
@@ -110,7 +104,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-          </div>
+          </div></>
         )}
       </div>
     </main>

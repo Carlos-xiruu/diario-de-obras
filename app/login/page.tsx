@@ -1,34 +1,25 @@
 "use client";
 import { useState } from 'react';
-import { supabase } from '@/lib/supabase';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [isLogin, setIsLogin] = useState(true);
+  const [erro, setErro] = useState<string | null>(null);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setErro(null);
 
     try {
-      if (isLogin) {
-        // Agora, com o createBrowserClient, este comando salvará um Cookie!
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-        
-        console.log("Login OK. Redirecionando...");
-        // Força o reload para o middleware ler o cookie novo
-        window.location.href = '/'; 
-      } else {
-        const { error } = await supabase.auth.signUp({ email, password });
-        if (error) throw error;
-        alert("Conta criada! Pode logar agora.");
-        setIsLogin(true);
-      }
-    } catch (err: any) {
-      alert("Erro: " + err.message);
+      const response = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error);
+      window.location.href = '/';
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Não foi possível entrar.';
+      setErro(message);
     } finally {
       setLoading(false);
     }
@@ -38,8 +29,9 @@ export default function Login() {
     <main className="min-h-screen flex items-center justify-center bg-[#020617] p-4">
       <form onSubmit={handleAuth} className="w-full max-w-sm bg-slate-900/60 p-8 rounded-2xl border border-slate-700">
         <h2 className="text-2xl font-black text-white mb-6 uppercase text-center">
-          {isLogin ? "Acesso Restrito" : "Criar Conta"}
+          Acesso Restrito
         </h2>
+        {erro && <p role="alert" className="mb-4 rounded-xl border border-red-500/50 bg-red-950/40 p-3 text-sm text-red-200">{erro}</p>}
         
         <input 
           required 
@@ -62,15 +54,7 @@ export default function Login() {
           disabled={loading}
           className="w-full p-4 bg-blue-600 font-bold rounded-xl text-white hover:bg-blue-500 transition-colors disabled:opacity-50"
         >
-          {loading ? "PROCESSANDO..." : (isLogin ? "ENTRAR" : "CADASTRAR")}
-        </button>
-
-        <button 
-          type="button"
-          onClick={() => setIsLogin(!isLogin)}
-          className="w-full mt-4 text-slate-400 hover:text-white text-sm transition-colors"
-        >
-          {isLogin ? "Não tem conta? Cadastre-se" : "Já tem conta? Fazer Login"}
+          {loading ? "PROCESSANDO..." : "ENTRAR"}
         </button>
       </form>
     </main>

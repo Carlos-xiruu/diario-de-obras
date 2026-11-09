@@ -1,7 +1,6 @@
 "use client";
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
 
 export default function Navbar() {
   const router = useRouter();
@@ -10,8 +9,8 @@ export default function Navbar() {
   if (pathname === '/login') return null;
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push('/login');
+    await fetch('/api/auth/logout', { method: 'POST' });
+    router.replace('/login');
     router.refresh();
   };
 

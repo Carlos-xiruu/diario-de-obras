@@ -3,7 +3,13 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Montserrat, Inter } from "next/font/google";
-import { supabase } from "@/lib/supabase";
+import { buildDiarioPayload } from '@/lib/diario-payload';
+import { getErrorMessage } from '@/lib/errors';
+import { atualizarDiario, buscarDiario } from '@/lib/services/diarios';
+import { aplicarMontagemDiario, listarItensMontagemDiario, type MontagemSelecionada } from '@/lib/services/montagem';
+import { MontagemPecas } from '@/app/components/MontagemPecas';
+import { ConfirmDialog } from '@/app/components/ConfirmDialog';
+import type { Diario } from '@/lib/types';
 
 const montserrat = Montserrat({ subsets: ["latin"], weight: ["700", "800", "900"] });
 const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600", "700"] });
@@ -18,6 +24,7 @@ export default function EditarDiario() {
   
   // Estados do formulário
   const [obra, setObra] = useState("");
+  const [obraId, setObraId] = useState<string | null>(null);
   const [cidade, setCidade] = useState("");
   const [dataRegistro, setDataRegistro] = useState("");
   const [clima, setClima] = useState("");
@@ -31,6 +38,11 @@ export default function EditarDiario() {
   const [guindasteHrs, setGuindasteHrs] = useState("");
   const [m3Montado, setM3Montado] = useState("");
   const [qtdBisnagasPu, setQtdBisnagasPu] = useState("");
+  const [diario, setDiario] = useState<Diario | null>(null);
+  const [pecasMontadas, setPecasMontadas] = useState<MontagemSelecionada[]>([]);
+  const [mensagem, setMensagem] = useState<string | null>(null);
+  const [cancelamentoAberto, setCancelamentoAberto] = useState(false);
+  const [motivoCancelamento, setMotivoCancelamento] = useState('');
 
   // Carregar os dados antigos do banco ao abrir a tela
   useEffect(() => {
@@ -38,15 +50,11 @@ export default function EditarDiario() {
 
     async function carregarDados() {
       try {
-        const { data, error } = await supabase
-          .from('diarios')
-          .select('*')
-          .eq('id', id)
-          .single();
-
-        if (error) throw error;
+          const data = await buscarDiario(id);
+          setDiario(data);
 
         if (data) {
+          setObraId(data.obra_id);
           setObra(data.obra || "");
           setCidade(data.cidade || "");
           setDataRegistro(data.data_registro || "");
@@ -59,10 +67,12 @@ export default function EditarDiario() {
           setMunkHrs(String(data.munk_hrs || ""));
           setGuindasteHrs(String(data.guindaste_hrs || ""));
           setM3Montado(String(data.m3_montado || ""));
-          setQtdBisnagasPu(String(data.qtd_bisnagas_pu || ""));
+            setQtdBisnagasPu(String(data.qtd_bisnagas_pu || ""));
+            const itens = await listarItensMontagemDiario(id);
+            setPecasMontadas(itens.map((item) => ({ obra_peca_id: item.obra_peca_id, quantidade: item.quantidade })));
         }
-      } catch (err) {
-        alert("Erro ao carregar dados do diário: " + (err as Error).message);
+      } catch (error) {
+        alert(`Erro ao carregar dados do diário: ${getErrorMessage(error, 'Tente novamente.')}`);
       } finally {
         setCarregando(false);
       }
@@ -82,48 +92,41 @@ export default function EditarDiario() {
     setEquipe(equipe.filter((_, i) => i !== index));
   };
 
-  const salvarAlteracoes = async (e: React.FormEvent) => {
+  const salvarAlteracoes = async (e: React.FormEvent, acao?: 'rascunho' | 'confirmar' | 'editar') => {
     e.preventDefault();
     setEnviando(true);
 
-    const limparNumero = (val: string) => {
-      if (!val) return 0;
-      return Number(val.replace(',', '.')) || 0;
-    };
-
-    const payload = { 
-      obra, 
-      cidade, 
-      data_registro: dataRegistro,
-      clima, 
-      equipe: equipe.join(", "),
-      munk_hrs: limparNumero(munkHrs),
-      guindaste_hrs: limparNumero(guindasteHrs), 
-      horas_trabalhadas: limparNumero(horasTrabalhadas), 
-      m3_montado: limparNumero(m3Montado), 
-      qtd_bisnagas_pu: limparNumero(qtdBisnagasPu), 
-      eixos_montados: eixosMontados, 
-      encunhamento_pilares: encunhamento === 'sim',
-      observacoes 
-    };
+    const payload = buildDiarioPayload({
+      obraId, obra, cidade, dataRegistro, clima, equipe, horasTrabalhadas, eixosMontados,
+      munkHrs, guindasteHrs, m3Montado, qtdBisnagasPu, encunhamento, observacoes,
+    });
 
     try {
-      // Usamos .update() em vez de .insert() filtrando pelo ID do diário atual
-      const { error } = await supabase
-        .from('diarios')
-        .update(payload)
-        .eq('id', id);
+      await atualizarDiario(id, payload);
+      const proximaAcao = acao ?? (diario?.montagem_status === 'confirmado' ? 'editar' : 'rascunho');
+      if (pecasMontadas.length > 0 || proximaAcao === 'editar') await aplicarMontagemDiario(id, pecasMontadas, proximaAcao, crypto.randomUUID());
 
-      if (error) throw error;
-
-      alert("Diário atualizado com sucesso!");
+      setMensagem(proximaAcao === 'editar' ? 'Alterações confirmadas e saldo recalculado.' : 'Rascunho salvo no servidor.');
+      setDiario((current) => current ? { ...current, montagem_status: proximaAcao === 'confirmar' || proximaAcao === 'editar' ? 'confirmado' : current.montagem_status } : current);
       router.push(`/visualizar/${id}`); // Volta para a tela do PDF atualizada
       router.refresh();
     } catch (error) {
-      alert("Erro ao atualizar: " + (error as Error).message);
+      alert(`Erro ao atualizar: ${getErrorMessage(error, 'Tente novamente.')}`);
     } finally {
       setEnviando(false);
     }
+  };
+
+  const cancelarDiario = async () => {
+    if (diario?.montagem_status !== 'confirmado') return;
+    if (!motivoCancelamento.trim()) { setMensagem('Informe o motivo do cancelamento.'); return; }
+    setEnviando(true);
+    try {
+      await aplicarMontagemDiario(id, [], 'cancelar', crypto.randomUUID(), motivoCancelamento);
+      setDiario({ ...diario, montagem_status: 'cancelado', volume_estruturado_m3: 0 });
+      setMensagem('Diário cancelado. O saldo foi devolvido e a auditoria foi preservada.');
+      setCancelamentoAberto(false);
+    } catch (error) { setMensagem(`Não foi possível cancelar: ${getErrorMessage(error, 'Tente novamente.')}`); } finally { setEnviando(false); }
   };
 
   if (carregando) {
@@ -148,6 +151,8 @@ export default function EditarDiario() {
         </div>
 
         <form onSubmit={salvarAlteracoes} className="p-6 md:p-10 space-y-10">
+          {mensagem && <p className="rounded-xl border border-emerald-600 bg-emerald-950/40 p-3 text-emerald-200">{mensagem}</p>}
+          <p className="rounded-xl border border-slate-700 bg-slate-950 p-3 text-sm">Estado: <strong>{diario?.montagem_status ?? 'rascunho'}</strong>{diario?.montagem_status === 'legado' && ' · Volume manual histórico preservado.'}</p>
           
           <section>
             <h2 className={`${montserrat.className} text-xl font-extrabold text-slate-100 mb-6 uppercase`}>1. Identificação</h2>
@@ -166,6 +171,8 @@ export default function EditarDiario() {
               </div>
             </div>
           </section>
+
+          {diario?.montagem_status !== 'legado' && diario?.montagem_status !== 'cancelado' && <MontagemPecas obraId={obraId} value={pecasMontadas} onChange={setPecasMontadas} />}
 
           <section>
             <h2 className={`${montserrat.className} text-xl font-extrabold text-slate-100 mb-6 uppercase pt-6 border-t border-slate-700/50`}>2. Produção e Maquinário</h2>
@@ -222,13 +229,16 @@ export default function EditarDiario() {
           </section>
 
           <div className="pt-8 border-t border-slate-700/50 mt-8">
-            <button type="submit" disabled={enviando} className={`${montserrat.className} w-full font-black tracking-widest rounded-xl text-lg uppercase px-5 py-5 text-center bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg`}>
-              {enviando ? "A salvar alterações..." : "Salvar Alterações"}
-            </button>
+            <button type="submit" disabled={enviando || diario?.montagem_status === 'cancelado'} className={`${montserrat.className} w-full font-black tracking-widest rounded-xl text-lg uppercase px-5 py-5 text-center bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg`}>{enviando ? "A salvar alterações..." : diario?.montagem_status === 'confirmado' ? "Salvar edição confirmada" : "Salvar rascunho"}</button>
+            {diario?.montagem_status === 'rascunho' && pecasMontadas.length > 0 && <button type="button" onClick={(event) => void salvarAlteracoes(event as unknown as React.FormEvent, 'confirmar')} disabled={enviando} className="mt-3 w-full rounded-xl bg-emerald-600 px-5 py-5 font-black uppercase text-white">Confirmar diário e debitar peças</button>}
+            {diario?.montagem_status === 'confirmado' && <button type="button" onClick={() => setCancelamentoAberto(true)} disabled={enviando} className="mt-3 w-full rounded-xl border border-red-500 px-5 py-4 font-bold text-red-300">Cancelar diário e devolver saldo</button>}
           </div>
 
         </form>
       </div>
+      <ConfirmDialog open={cancelamentoAberto} title="Cancelar diário" description="O saldo de todas as peças deste diário será devolvido. O cancelamento não pode ser desfeito." confirmLabel="Cancelar e devolver saldo" busy={enviando} danger onCancel={() => setCancelamentoAberto(false)} onConfirm={() => void cancelarDiario()}>
+        <label className="mt-4 block text-sm font-bold text-slate-200">Motivo do cancelamento<textarea autoFocus value={motivoCancelamento} onChange={(event) => setMotivoCancelamento(event.target.value)} rows={3} className="mt-2 w-full rounded-xl border border-slate-600 bg-slate-950 p-3 font-normal text-white" /></label>
+      </ConfirmDialog>
     </main>
   );
 }
